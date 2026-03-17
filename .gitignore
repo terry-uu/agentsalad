@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+.npm-cache/
+
+# Build output
+dist/
+
+# Runtime data
+store/
+logs/
+
+# Secrets
+*.keys.json
+.env
+
+# Temp files
+.tmp-*
+
+# Internal docs
+handover.md
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
