@@ -149,7 +149,7 @@ A Salad has three ingredients:
 
 Combine the three and your service starts immediately. No terminal commands. Just drag, drop, and click **Make**.
 
-<video src="https://github.com/user-attachments/assets/9ba916a5-928c-49ae-afa5-39e3ae1ac2c8" autoplay loop muted playsinline></video>
+https://github.com/user-attachments/assets/9ba916a5-928c-49ae-afa5-39e3ae1ac2c8
 
 ### Skills
 
@@ -167,7 +167,7 @@ A Cron has a **time**, a **prompt**, and a **skill hint**.
 
 Attach a Cron to a Salad, and the prompt fires to the agent on schedule. The skill hint tells the agent which tools it needs for that job.
 
-<video src="https://github.com/user-attachments/assets/21473ac6-f05f-4005-b37b-dfee72ecd6e7" autoplay loop muted playsinline></video>
+https://github.com/user-attachments/assets/21473ac6-f05f-4005-b37b-dfee72ecd6e7
 
 ### Multi-Target
 
