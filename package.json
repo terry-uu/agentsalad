@@ -78,7 +78,30 @@
         "to": "app-server/node_modules",
         "filter": [
           "**/*",
-          "!**/playwright/.local-browsers/**"
+          "!.bin/**",
+          "!**/playwright/.local-browsers/**",
+          "!electron/**",
+          "!electron-builder/**",
+          "!app-builder-bin/**",
+          "!app-builder-lib/**",
+          "!electron-winstaller/**",
+          "!@electron/rebuild/**",
+          "!@electron/osx-sign/**",
+          "!@electron/notarize/**",
+          "!@electron/universal/**",
+          "!@electron/windows-sign/**",
+          "!7zip-bin/**",
+          "!dmg-builder/**",
+          "!postject/**",
+          "!typescript/**",
+          "!prettier/**",
+          "!husky/**",
+          "!vitest/**",
+          "!@vitest/**",
+          "!tsx/**",
+          "!esbuild/**",
+          "!@esbuild/**",
+          "!@types/**"
         ]
       }
     ],
