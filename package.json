@@ -1,6 +1,6 @@
 {
   "name": "agentsalad",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Multi-provider AI agent platform served through messenger channels.",
   "license": "Elastic-2.0",
   "type": "module",
