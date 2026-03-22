@@ -22,6 +22,7 @@ Auto-compaction (Claude SDK pattern): when conversation context exceeds 75% of t
 | `src/providers/system-prompt.ts` | Immutable System Prompt 1 (base rules for all agents) |
 | `src/providers/anthropic.ts` | Anthropic provider adapter |
 | `src/providers/openai.ts` | OpenAI provider adapter |
+| `src/providers/google.ts` | Google Gemini provider adapter |
 | `src/providers/groq.ts` | Groq provider adapter |
 | `src/providers/openrouter.ts` | OpenRouter provider adapter |
 | `src/providers/opencode.ts` | OpenCode provider adapter |
@@ -82,8 +83,8 @@ User ──▶ Messenger ──▶ Channel (Telegram/Discord/Slack)
                      Provider Router (Vercel AI SDK)
                      ├─ 3-layer system prompt (base + skills + agent)
                      ├─ tools + stopWhen(stepCountIs(10))
-                     ├─ Anthropic  ├─ OpenAI  ├─ Groq
-                     ├─ OpenRouter └─ OpenCode
+                     ├─ Anthropic  ├─ OpenAI  ├─ Google (Gemini)
+                     ├─ Groq  ├─ OpenRouter └─ OpenCode
                               │
                     ┌─────────┼─────────┐ (tool calling loop)
                     ▼         ▼         ▼

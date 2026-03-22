@@ -21,10 +21,12 @@
     "electron": "npm run build:electron && node electron/launch.cjs",
     "electron:dev": "npm run build:electron && node electron/launch.cjs",
     "electron:node": "node scripts/download-node.cjs",
-    "electron:build": "npm run build && npm run build:electron && npm run electron:node && electron-builder"
+    "electron:prepare": "node scripts/prepare-app-server.cjs",
+    "electron:build": "npm run build && npm run build:electron && npm run electron:prepare && electron-builder"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
+    "@ai-sdk/google": "^3.0.52",
     "@ai-sdk/openai": "^3.0.41",
     "@ai-sdk/openai-compatible": "^2.0.35",
     "@slack/bolt": "^4.6.0",
@@ -66,43 +68,16 @@
     ],
     "extraResources": [
       {
-        "from": "build/node",
-        "to": "node"
-      },
-      {
         "from": "dist",
         "to": "app-server/dist"
       },
       {
-        "from": "node_modules",
-        "to": "app-server/node_modules",
-        "filter": [
-          "**/*",
-          "!.bin/**",
-          "!**/playwright/.local-browsers/**",
-          "!electron/**",
-          "!electron-builder/**",
-          "!app-builder-bin/**",
-          "!app-builder-lib/**",
-          "!electron-winstaller/**",
-          "!@electron/rebuild/**",
-          "!@electron/osx-sign/**",
-          "!@electron/notarize/**",
-          "!@electron/universal/**",
-          "!@electron/windows-sign/**",
-          "!7zip-bin/**",
-          "!dmg-builder/**",
-          "!postject/**",
-          "!typescript/**",
-          "!prettier/**",
-          "!husky/**",
-          "!vitest/**",
-          "!@vitest/**",
-          "!tsx/**",
-          "!esbuild/**",
-          "!@esbuild/**",
-          "!@types/**"
-        ]
+        "from": "build/app-server-pkg/package.json",
+        "to": "app-server/package.json"
+      },
+      {
+        "from": "build/app-server-pkg/package-lock.json",
+        "to": "app-server/package-lock.json"
       }
     ],
     "mac": {
@@ -128,17 +103,26 @@
     },
     "dmg": {
       "contents": [
-        { "x": 170, "y": 300 },
-        { "x": 460, "y": 300, "type": "link", "path": "/Applications" }
+        {
+          "x": 170,
+          "y": 300
+        },
+        {
+          "x": 460,
+          "y": 300,
+          "type": "link",
+          "path": "/Applications"
+        }
       ],
-      "window": { "width": 660, "height": 500 }
+      "window": {
+        "width": 660,
+        "height": 500
+      }
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },
-    "asarUnpack": [
-      "**/better-sqlite3/**"
-    ]
+    "asarUnpack": []
   }
 }

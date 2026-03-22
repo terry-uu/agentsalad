@@ -118,9 +118,7 @@ export async function executeCustomScript(
   workspacePath: string,
   timeoutMs: number,
 ): Promise<ScriptResult> {
-  const command = IS_WIN
-    ? script
-    : `bash -c ${escapeShellArg(script)}`;
+  const command = IS_WIN ? script : `bash -c ${escapeShellArg(script)}`;
   return runScript(command, input, workspacePath, timeoutMs);
 }
 

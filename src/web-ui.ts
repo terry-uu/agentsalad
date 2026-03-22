@@ -71,7 +71,12 @@ export interface WebUiContext {
   pairDiscordBot: (
     channelId: string,
     botToken: string,
-  ) => Promise<{ success: boolean; error?: string; botUsername?: string; botId?: string }>;
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+    botUsername?: string;
+    botId?: string;
+  }>;
   pairSlackBot: (
     channelId: string,
     botToken: string,
@@ -952,7 +957,7 @@ en:{
   sd_cron:'Agent self-manages scheduled tasks. Use for requests like "summarize news every morning".',
   // Provider hints
   provHintAnthropic:'e.g. claude-sonnet-4-20250514',provHintOpenai:'e.g. gpt-4o',
-  provHintGroq:'e.g. llama-3.3-70b-versatile',provHintOpenrouter:'e.g. anthropic/claude-sonnet-4-20250514',
+  provHintGoogle:'e.g. gemini-2.5-flash',provHintGroq:'e.g. llama-3.3-70b-versatile',provHintOpenrouter:'e.g. anthropic/claude-sonnet-4-20250514',
   provHintOpencode:'e.g. claude-sonnet-4-20250514',
   modelListLink:'View {name} model list',
   // Misc
@@ -1136,7 +1141,7 @@ ko:{
   sd_google_drive:'Google 드라이브에서 파일을 검색·다운로드·업로드 합니다. Google OAuth2 인증 도구인 <b>gog CLI</b>가 필요합니다.',
   sd_cron:'에이전트가 스스로 예약 작업을 만들고 관리합니다. "매일 아침 뉴스 정리해줘" 같은 요청에 사용합니다.',
   provHintAnthropic:'예: claude-sonnet-4-20250514',provHintOpenai:'예: gpt-4o',
-  provHintGroq:'예: llama-3.3-70b-versatile',provHintOpenrouter:'예: anthropic/claude-sonnet-4-20250514',
+  provHintGoogle:'예: gemini-2.5-flash',provHintGroq:'예: llama-3.3-70b-versatile',provHintOpenrouter:'예: anthropic/claude-sonnet-4-20250514',
   provHintOpencode:'예: claude-sonnet-4-20250514',
   modelListLink:'{name} 모델 목록 확인하기',
   toolsLabel:'도구',confirmDetachCron:'"{name}" 예약을 이 샐러드에서 분리하시겠습니까?',shutdownFailed:'종료 실패: ',
@@ -1317,7 +1322,7 @@ ja:{
   sd_google_drive:'Googleドライブでファイルを検索・ダウンロード・アップロードします。<b>gog CLI</b>（Google OAuth2）が必要です。',
   sd_cron:'エージェントが自分で予約タスクを作成・管理します。「毎朝ニュースまとめて」のような依頼に使います。',
   provHintAnthropic:'例: claude-sonnet-4-20250514',provHintOpenai:'例: gpt-4o',
-  provHintGroq:'例: llama-3.3-70b-versatile',provHintOpenrouter:'例: anthropic/claude-sonnet-4-20250514',
+  provHintGoogle:'例: gemini-2.5-flash',provHintGroq:'例: llama-3.3-70b-versatile',provHintOpenrouter:'例: anthropic/claude-sonnet-4-20250514',
   provHintOpencode:'例: claude-sonnet-4-20250514',
   modelListLink:'{name}モデル一覧を見る',
   toolsLabel:'ツール',confirmDetachCron:'「{name}」をこのサラダから外しますか？',shutdownFailed:'停止失敗: ',
@@ -1497,7 +1502,7 @@ zh:{
   sd_google_drive:'在Google云端硬盘中搜索、下载、上传文件。需要<b>gog CLI</b>（Google OAuth2）。',
   sd_cron:'代理自主创建和管理定时任务。用于"每天早上整理新闻"之类的请求。',
   provHintAnthropic:'例: claude-sonnet-4-20250514',provHintOpenai:'例: gpt-4o',
-  provHintGroq:'例: llama-3.3-70b-versatile',provHintOpenrouter:'例: anthropic/claude-sonnet-4-20250514',
+  provHintGoogle:'例: gemini-2.5-flash',provHintGroq:'例: llama-3.3-70b-versatile',provHintOpenrouter:'例: anthropic/claude-sonnet-4-20250514',
   provHintOpencode:'例: claude-sonnet-4-20250514',
   modelListLink:'查看{name}模型列表',
   toolsLabel:'工具',confirmDetachCron:'从此沙拉中分离"{name}"？',shutdownFailed:'关闭失败: ',
@@ -1937,6 +1942,7 @@ function toggleModal(){$('modal').classList.toggle('show')}
 function getProviderDocs(){return{
   anthropic:{url:'https://docs.anthropic.com/en/docs/about-claude/models',keyUrl:'https://console.anthropic.com/settings/keys',name:'Anthropic',hint:t('provHintAnthropic')},
   openai:{url:'https://platform.openai.com/docs/models',keyUrl:'https://platform.openai.com/api-keys',name:'OpenAI',hint:t('provHintOpenai')},
+  google:{url:'https://ai.google.dev/gemini-api/docs/models',keyUrl:'https://aistudio.google.com/apikey',name:'Google (Gemini)',hint:t('provHintGoogle')},
   groq:{url:'https://console.groq.com/docs/models',keyUrl:'https://console.groq.com/keys',name:'Groq',hint:t('provHintGroq')},
   openrouter:{url:'https://openrouter.ai/models',keyUrl:'https://openrouter.ai/settings/keys',name:'OpenRouter',hint:t('provHintOpenrouter')},
   opencode:{url:'https://opencode.ai',keyUrl:'https://opencode.ai/auth',name:'OpenCode',hint:t('provHintOpencode')},

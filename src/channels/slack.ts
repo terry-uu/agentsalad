@@ -52,7 +52,11 @@ export function createSlackChannel(config: SlackChannelConfig): Channel {
   /** Placeholder messages posted as typing indicator (targetKey → { channel, ts }) */
   const typingPlaceholders = new Map<string, { channel: string; ts: string }>();
 
-  async function postPlaceholder(targetKey: string, channelOrUserId: string, threadTs?: string): Promise<void> {
+  async function postPlaceholder(
+    targetKey: string,
+    channelOrUserId: string,
+    threadTs?: string,
+  ): Promise<void> {
     if (typingPlaceholders.has(targetKey)) return;
     try {
       const result = await app.client.chat.postMessage({
@@ -61,7 +65,10 @@ export function createSlackChannel(config: SlackChannelConfig): Channel {
         ...(threadTs ? { thread_ts: threadTs } : {}),
       });
       if (result.ts && result.channel) {
-        typingPlaceholders.set(targetKey, { channel: result.channel, ts: result.ts });
+        typingPlaceholders.set(targetKey, {
+          channel: result.channel,
+          ts: result.ts,
+        });
       }
     } catch {
       // non-critical — typing indicator is best-effort

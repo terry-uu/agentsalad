@@ -392,6 +392,13 @@ function ensureDefaultProviders(): void {
       auth_scheme: 'bearer' as const,
     },
     {
+      id: 'google',
+      provider_key: 'google',
+      name: 'Google (Gemini)',
+      base_url: 'https://generativelanguage.googleapis.com/v1beta',
+      auth_scheme: 'bearer' as const,
+    },
+    {
       id: 'opencode',
       provider_key: 'opencode',
       name: 'OpenCode',

@@ -5,7 +5,7 @@
  * 프록시 없이 직접 연결하므로 레이턴시가 최소.
  * Tool calling 지원: tools + stopWhen(stepCountIs) 으로 멀티스텝 자동 처리.
  *
- * 지원 프로바이더: Anthropic, OpenAI, Groq, OpenRouter, OpenCode
+ * 지원 프로바이더: Anthropic, OpenAI, Google (Gemini), Groq, OpenRouter, OpenCode
  *
  * API 에러 발생 시 ProviderError로 분류하여 상위에서 사용자 메시지 전달 가능.
  */
@@ -25,6 +25,7 @@ import { createOpenAIModel } from './openai.js';
 import { createGroqModel } from './groq.js';
 import { createOpenRouterModel } from './openrouter.js';
 import { createOpenCodeModel } from './opencode.js';
+import { createGoogleModel } from './google.js';
 
 export { buildSystemPrompt } from './system-prompt.js';
 
@@ -62,6 +63,7 @@ type ModelFactory = (params: {
 const MODEL_FACTORIES: Record<string, ModelFactory> = {
   anthropic: createAnthropicModel,
   openai: createOpenAIModel,
+  google: createGoogleModel,
   groq: createGroqModel,
   openrouter: createOpenRouterModel,
   opencode: createOpenCodeModel,
@@ -134,9 +136,11 @@ function classifyApiError(err: unknown): ProviderError {
     bodyLower.includes('too long')
   ) {
     type = 'context_length';
-    userMsg = '⚠️ Conversation too long to process. Please start a new conversation.';
+    userMsg =
+      '⚠️ Conversation too long to process. Please start a new conversation.';
   } else {
-    userMsg = '⚠️ An error occurred while generating a response. Please try again shortly.';
+    userMsg =
+      '⚠️ An error occurred while generating a response. Please try again shortly.';
   }
 
   return new ProviderError(type, status, userMsg, err);

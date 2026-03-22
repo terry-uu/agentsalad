@@ -50,6 +50,11 @@ const CONTEXT_WINDOWS: Record<string, number> = {
   'openai:o1-mini': 128_000,
   'openai:o3-mini': 200_000,
 
+  // Google (Gemini)
+  'google:gemini-2.5-pro': 1_048_576,
+  'google:gemini-2.5-flash': 1_048_576,
+  'google:gemini-2.0-flash': 1_048_576,
+
   // Groq (hosted models)
   'groq:llama-3.3-70b-versatile': 128_000,
   'groq:llama-3.1-8b-instant': 128_000,

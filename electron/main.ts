@@ -62,6 +62,8 @@ const TRAY_ICONS: Record<ServerStatus, NativeImage> = {} as Record<
 
 function initTrayIcons(): void {
   TRAY_ICONS.stopped = createTrayIcon('gray');
+  TRAY_ICONS.checking = createTrayIcon('gray');
+  TRAY_ICONS.installing = createTrayIcon('gray');
   TRAY_ICONS.starting = createTrayIcon('gray');
   TRAY_ICONS.running = createTrayIcon('green');
   TRAY_ICONS.error = createTrayIcon('red');
@@ -155,7 +157,7 @@ function createTray(): void {
 
 function updateTrayMenu(): void {
   const isRunning = serverManager.status === 'running';
-  const isStarting = serverManager.status === 'starting';
+  const isBusy = ['checking', 'installing', 'starting'].includes(serverManager.status);
   const update = getAvailableUpdate();
 
   const template: Electron.MenuItemConstructorOptions[] = [];
@@ -169,18 +171,18 @@ function updateTrayMenu(): void {
 
   template.push(
     {
-      label: isRunning ? 'Server Running' : isStarting ? 'Starting...' : 'Server Stopped',
+      label: isRunning ? 'Server Running' : isBusy ? 'Starting...' : 'Server Stopped',
       enabled: false,
     },
     { type: 'separator' },
     {
       label: 'Start Server',
-      enabled: !isRunning && !isStarting,
-      click: () => serverManager.start(),
+      enabled: !isRunning && !isBusy,
+      click: () => void serverManager.start(),
     },
     {
       label: 'Stop Server',
-      enabled: isRunning || isStarting,
+      enabled: isRunning || isBusy,
       click: () => void serverManager.stop(),
     },
     { type: 'separator' },
@@ -209,6 +211,8 @@ function updateTrayForStatus(status: ServerStatus): void {
 
   const labels: Record<ServerStatus, string> = {
     stopped: 'Agent Salad — Stopped',
+    checking: 'Agent Salad — Checking...',
+    installing: 'Agent Salad — Installing...',
     starting: 'Agent Salad — Starting...',
     running: 'Agent Salad — Running',
     error: 'Agent Salad — Error',
@@ -220,8 +224,8 @@ function updateTrayForStatus(status: ServerStatus): void {
 // ── IPC Handlers ────────────────────────────────────────────
 
 function setupIPC(): void {
-  ipcMain.handle('server:start', () => {
-    serverManager.start();
+  ipcMain.handle('server:start', async () => {
+    await serverManager.start();
   });
 
   ipcMain.handle('server:stop', async () => {

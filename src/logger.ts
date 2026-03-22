@@ -27,7 +27,11 @@ function levelLabel(levelNum: number): string {
 }
 
 /** warn/error/fatal 로그를 링버퍼에 캡처 */
-function captureToBuffer(levelNum: number, obj: Record<string, unknown>, msg: string): void {
+function captureToBuffer(
+  levelNum: number,
+  obj: Record<string, unknown>,
+  msg: string,
+): void {
   if (levelNum < 40) return;
 
   const { err, ...rest } = obj;
@@ -67,9 +71,13 @@ export const logger = pino({
   transport: { target: 'pino-pretty', options: { colorize: true } },
   hooks: {
     logMethod(inputArgs, method, level) {
-      const [obj, msg] = (typeof inputArgs[0] === 'object' && inputArgs[0] !== null)
-        ? [inputArgs[0] as Record<string, unknown>, String(inputArgs[1] ?? '')]
-        : [{}, String(inputArgs[0] ?? '')];
+      const [obj, msg] =
+        typeof inputArgs[0] === 'object' && inputArgs[0] !== null
+          ? [
+              inputArgs[0] as Record<string, unknown>,
+              String(inputArgs[1] ?? ''),
+            ]
+          : [{}, String(inputArgs[0] ?? '')];
       captureToBuffer(level, obj, msg);
       method.apply(this, inputArgs as Parameters<typeof method>);
     },
