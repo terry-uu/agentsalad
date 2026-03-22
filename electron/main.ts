@@ -117,11 +117,7 @@ async function createWindow(): Promise<void> {
 }
 
 function loadStatusPage(): void {
-  const htmlPath = path.join(
-    app.isPackaged ? __dirname : path.resolve(__dirname, '..', 'electron'),
-    'renderer',
-    'index.html',
-  );
+  const htmlPath = path.join(__dirname, '..', 'electron', 'renderer', 'index.html');
   mainWindow?.loadFile(htmlPath);
 }
 
