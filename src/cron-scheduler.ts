@@ -1,17 +1,15 @@
 /**
  * Cron Scheduler — 서비스 단위 예약 작업 실행 엔진
  *
- * 30초 간격으로 service_crons 테이블의 due 작업을 체크하여
+ * 10초 간격으로 service_crons 테이블의 due 작업을 체크하여
  * service-router의 processCronMessage를 통해 실행.
  * daily 크론은 다음 날 같은 시간으로, once 크론은 실행 후 삭제.
  *
- * 의도적 직렬 실행: due 작업을 for...of + await로 순차 처리.
- * - LLM API rate limit 보호 (동시 다발 호출 시 429 에러 방지)
- * - 동일 에이전트의 컨텍스트 충돌 방지 (대화 이력 동시 쓰기 회피)
- * - 단일 프로세스에서의 메모리/CPU 안정성
- *
- * 대규모 서비스(수십 건 이상 동시 due) 환경에서는
- * p-limit 등으로 동시 실행 수를 제한하는 병렬화를 고려할 것.
+ * 제한적 병렬 실행: worker pool 패턴으로 최대 CRON_CONCURRENCY개 동시 처리.
+ * - 서로 다른 서비스의 크론은 병렬로 실행해 지연 최소화
+ * - LLM API rate limit은 동시성 제한(기본 3)으로 보호
+ * - everyone 템플릿 확장 시 child도 동일 동시성 제한 적용
+ * - SQLite 쓰기는 서비스별 분리(대화 이력)되어 충돌 없음
  */
 import { TIMEZONE } from './config.js';
 import {
@@ -24,7 +22,8 @@ import {
 import { processCronMessage } from './service-router.js';
 import { logger } from './logger.js';
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 10_000;
+const CRON_CONCURRENCY = 3;
 
 let running = false;
 
@@ -64,6 +63,78 @@ function buildScheduleLabel(type: string, time: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/**
+ * Worker pool 기반 동시 실행. 최대 concurrency개의 worker가
+ * items를 순서대로 꺼내 fn을 실행. JS 싱글 스레드에서
+ * index++은 원자적이므로 경합 없음 (await 이전에 증가 완료).
+ * @internal 테스트용 export
+ */
+export async function mapConcurrent<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency: number,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let index = 0;
+  async function worker() {
+    while (index < items.length) {
+      const i = index++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
+  );
+  return results;
+}
+
+type DueItem = ReturnType<typeof getDueServiceCrons>[number];
+
+async function processItem(item: DueItem): Promise<boolean> {
+  const scheduleLabel = buildScheduleLabel(
+    item.schedule_type,
+    item.schedule_time,
+  );
+  const notify = item.notify === 1;
+  const target = getTargetById(item.target_id);
+  const isEveryoneTemplate = target?.target_type === 'everyone';
+
+  if (isEveryoneTemplate) {
+    const childServices = listConcreteServicesForTemplate(item.service_id);
+    logger.info(
+      {
+        serviceId: item.service_id,
+        cronId: item.cron_id,
+        childCount: childServices.length,
+      },
+      'Cron: expanding everyone template to concrete services',
+    );
+    const results = await mapConcurrent(
+      childServices,
+      (child) =>
+        processCronMessage(
+          child.id,
+          item.name,
+          item.prompt,
+          item.skill_hint || '[]',
+          scheduleLabel,
+          notify,
+        ),
+      CRON_CONCURRENCY,
+    );
+    return results.every(Boolean);
+  }
+
+  return processCronMessage(
+    item.service_id,
+    item.name,
+    item.prompt,
+    item.skill_hint || '[]',
+    scheduleLabel,
+    notify,
+  );
+}
+
 async function tick(): Promise<void> {
   try {
     const dueItems = getDueServiceCrons();
@@ -71,63 +142,26 @@ async function tick(): Promise<void> {
 
     logger.info({ count: dueItems.length }, 'Cron: found due jobs');
 
-    for (const item of dueItems) {
-      const scheduleLabel = buildScheduleLabel(
-        item.schedule_type,
-        item.schedule_time,
-      );
-      const notify = item.notify === 1;
-      const target = getTargetById(item.target_id);
-      const isEveryoneTemplate = target?.target_type === 'everyone';
-
-      let ok = true;
-      if (isEveryoneTemplate) {
-        const childServices = listConcreteServicesForTemplate(item.service_id);
-        logger.info(
-          {
-            serviceId: item.service_id,
-            cronId: item.cron_id,
-            childCount: childServices.length,
-          },
-          'Cron: expanding everyone template to concrete services',
-        );
-        for (const child of childServices) {
-          const childOk = await processCronMessage(
-            child.id,
-            item.name,
-            item.prompt,
-            item.skill_hint || '[]',
-            scheduleLabel,
-            notify,
-          );
-          ok = ok && childOk;
-        }
-      } else {
-        ok = await processCronMessage(
-          item.service_id,
-          item.name,
-          item.prompt,
-          item.skill_hint || '[]',
-          scheduleLabel,
-          notify,
-        );
-      }
-
-      if (ok) {
-        if (item.schedule_type === 'daily') {
-          const nextRun = computeDailyNextRun(item.schedule_time);
-          updateServiceCronAfterRun(item.service_id, item.cron_id, nextRun);
+    await mapConcurrent(
+      dueItems,
+      async (item) => {
+        const ok = await processItem(item);
+        if (ok) {
+          if (item.schedule_type === 'daily') {
+            const nextRun = computeDailyNextRun(item.schedule_time);
+            updateServiceCronAfterRun(item.service_id, item.cron_id, nextRun);
+          } else {
+            updateServiceCronAfterRun(item.service_id, item.cron_id, null);
+          }
         } else {
-          // once: 실행 완료 → service_cron 삭제
-          updateServiceCronAfterRun(item.service_id, item.cron_id, null);
+          logger.warn(
+            { serviceId: item.service_id, cronId: item.cron_id },
+            'Cron execution failed or skipped',
+          );
         }
-      } else {
-        logger.warn(
-          { serviceId: item.service_id, cronId: item.cron_id },
-          'Cron execution failed or skipped',
-        );
-      }
-    }
+      },
+      CRON_CONCURRENCY,
+    );
 
     cleanupOrphanedOnceCrons();
   } catch (err) {

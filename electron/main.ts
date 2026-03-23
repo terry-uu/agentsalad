@@ -5,6 +5,8 @@
  * BrowserWindow에 상태 페이지 또는 웹 UI를 표시.
  * 시스템 트레이로 백그라운드 동작 지원.
  * 앱 아이콘: build/icon.{icns,ico,png} — BrowserWindow + electron-builder 모두 적용.
+ * 트레이 아이콘: 상태별 컬러 원형 — 원시 RGBA에서 PNG 직접 생성.
+ * (SVG→nativeImage는 Electron이 디코딩 불가 → 빈 이미지 이슈 수정)
  *
  * 동작:
  *  - X 버튼 → 창 숨김 (트레이에 유지, 서버 계속 동작)
@@ -21,6 +23,7 @@ import {
   type NativeImage,
 } from 'electron';
 import path from 'path';
+import zlib from 'zlib';
 import { ServerManager, type ServerStatus } from './server-manager';
 import { startUpdateChecker, stopUpdateChecker, getAvailableUpdate, openReleasePage } from './update-checker';
 
@@ -29,26 +32,68 @@ let tray: Tray | null = null;
 const serverManager = new ServerManager();
 let isQuitting = false;
 
-// ── Tray Icons ──────────────────────────────────────────────
+// ── Tray Icons (PNG 생성) ────────────────────────────────────
+// Electron의 nativeImage.createFromBuffer는 PNG/JPEG만 디코딩.
+// SVG 버퍼는 빈 이미지가 되므로, 원시 RGBA → PNG 직접 생성.
+
+function crc32(buf: Buffer): number {
+  let c = ~0;
+  for (let i = 0; i < buf.length; i++) {
+    c ^= buf[i];
+    for (let j = 0; j < 8; j++) c = (c >>> 1) ^ (c & 1 ? 0xedb88320 : 0);
+  }
+  return ~c >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length);
+  const t = Buffer.from(type, 'ascii');
+  const payload = Buffer.concat([t, data]);
+  const crcBuf = Buffer.alloc(4);
+  crcBuf.writeUInt32BE(crc32(payload));
+  return Buffer.concat([len, payload, crcBuf]);
+}
+
+function circlePng(size: number, r: number, g: number, b: number): Buffer {
+  const cx = size / 2, cy = size / 2, rad = size / 2 - 1;
+  const stride = 1 + size * 4;
+  const raw = Buffer.alloc(size * stride);
+  for (let y = 0; y < size; y++) {
+    raw[y * stride] = 0;
+    for (let x = 0; x < size; x++) {
+      const d = Math.sqrt((x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2);
+      const o = y * stride + 1 + x * 4;
+      const a = Math.min(1, Math.max(0, rad - d + 0.5));
+      raw[o] = r;
+      raw[o + 1] = g;
+      raw[o + 2] = b;
+      raw[o + 3] = Math.round(a * 255);
+    }
+  }
+  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  return Buffer.concat([
+    sig,
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', zlib.deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 function createTrayIcon(color: 'green' | 'red' | 'gray'): NativeImage {
-  const palette: Record<string, string> = {
-    green: '#22c55e',
-    red: '#ef4444',
-    gray: '#9ca3af',
+  const rgb: Record<string, [number, number, number]> = {
+    green: [34, 197, 94],
+    red: [239, 68, 68],
+    gray: [156, 163, 175],
   };
-  const fill = palette[color];
-
-  const size = 32;
-  const svg = `
-    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 2}" fill="${fill}" />
-    </svg>`;
-
-  const img = nativeImage.createFromBuffer(
-    Buffer.from(svg),
-    { scaleFactor: 2 },
-  );
+  const [r, g, b] = rgb[color];
+  const png = circlePng(32, r, g, b);
+  const img = nativeImage.createFromBuffer(png, { scaleFactor: 2 });
   if (process.platform === 'darwin') {
     img.setTemplateImage(false);
   }

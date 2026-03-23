@@ -2456,6 +2456,8 @@ function renderServices(){
       const tg=D.targets.find(t=>t.id===s.target_id);
       return '<div class="tg-card'+(s.status==='paused'?' paused':'')+'">'+
         '<span class="tg-name">'+esc(tg?.nickname||'?')+'</span>'+
+        '<div style="margin-top:6px;font-size:.68rem;color:var(--t3)">'+esc(t('individualCrons'))+'</div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">'+renderSvcCronPills(s.id)+'</div>'+
         '<button class="tg-del" onclick="event.stopPropagation();removeFromGroup(\\''+s.id+'\\')">\\u2715</button>'+
         '</div>';
     }).join('');
