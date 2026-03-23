@@ -190,9 +190,14 @@ function createTray(): void {
   tray.setToolTip('Agent Salad — Stopped');
   updateTrayMenu();
 
-  tray.on('click', () => {
-    showWindow();
-  });
+  // macOS: 트레이 클릭 = 컨텍스트 메뉴 (OS 표준). click 핸들러에서
+  // showWindow 호출 시 메뉴 팝업과 충돌해 깜빡임+Finder 포커스 발생.
+  // Windows/Linux만 click→showWindow, macOS는 메뉴의 Show Window 사용.
+  if (process.platform !== 'darwin') {
+    tray.on('click', () => {
+      showWindow();
+    });
+  }
 
   // macOS: Dock 아이콘 클릭 시 창 복원
   app.on('activate', () => {

@@ -102,21 +102,22 @@
       "icon": "build/icon.png"
     },
     "dmg": {
+      "iconSize": 80,
       "contents": [
         {
-          "x": 170,
-          "y": 300
+          "x": 150,
+          "y": 185
         },
         {
-          "x": 460,
-          "y": 300,
+          "x": 390,
+          "y": 185,
           "type": "link",
           "path": "/Applications"
         }
       ],
       "window": {
-        "width": 660,
-        "height": 500
+        "width": 540,
+        "height": 380
       }
     },
     "nsis": {
