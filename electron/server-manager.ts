@@ -7,9 +7,13 @@
  * PATH 복원: macOS GUI 앱은 터미널 PATH를 상속받지 못함.
  * 로그인 셸($SHELL -lc)에서 실제 PATH를 가져와 모든 child_process에 주입.
  *
+ * 데이터 영속성: 패키징 시 AGENTSALAD_STORE_DIR을 app.getPath('userData')/store로
+ * 설정하여 앱 번들 외부에 DB/워크스페이스를 저장. 앱 업데이트 시에도 데이터 보존.
+ * 레거시 데이터(앱 번들 내 store/)가 있으면 자동 마이그레이션.
+ *
  * 상태 흐름:
  *   stopped → (start)
- *     → checking   : PATH 복원 + Node.js 감지
+ *     → checking   : PATH 복원 + Node.js 감지 + 데이터 마이그레이션
  *     → installing : npm install --production (node_modules 없을 때)
  *     → starting   : 서버 프로세스 spawn + health check
  *     → running    : 서버 정상 가동
@@ -62,6 +66,58 @@ export class ServerManager extends EventEmitter {
       return path.join(process.resourcesPath, 'app-server');
     }
     return app.getAppPath();
+  }
+
+  /**
+   * 사용자 데이터 디렉토리 (DB, 워크스페이스 등).
+   * 패키징: ~/Library/Application Support/AgentSalad/store (macOS 기준)
+   * 개발: 프로젝트 루트의 store/ (기존 동작 유지)
+   */
+  private getStoreDir(): string {
+    if (app.isPackaged) {
+      return path.join(app.getPath('userData'), 'store');
+    }
+    return path.join(app.getAppPath(), 'store');
+  }
+
+  /**
+   * 레거시 마이그레이션: 이전 버전에서 앱 번들 내부(appRoot/store/)에
+   * 저장된 데이터를 userData/store/로 이동.
+   * 새 위치에 DB가 이미 있으면 스킵 (마이그레이션 완료 또는 신규 설치).
+   */
+  private migrateStoreIfNeeded(): void {
+    if (!app.isPackaged) return;
+
+    const newStoreDir = this.getStoreDir();
+    const legacyStoreDir = path.join(this.getAppRoot(), 'store');
+    const newDbPath = path.join(newStoreDir, 'messages.db');
+    const legacyDbPath = path.join(legacyStoreDir, 'messages.db');
+
+    if (fs.existsSync(newDbPath) || !fs.existsSync(legacyDbPath)) return;
+
+    this.appendLog('[migration] Legacy store detected inside app bundle, migrating...');
+    try {
+      fs.mkdirSync(newStoreDir, { recursive: true });
+      this.copyDirRecursive(legacyStoreDir, newStoreDir);
+      this.appendLog(`[migration] Data migrated to ${newStoreDir}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.appendLog(`[migration] Migration failed: ${msg} — starting fresh`);
+    }
+  }
+
+  private copyDirRecursive(src: string, dest: string): void {
+    fs.mkdirSync(dest, { recursive: true });
+    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+      const srcPath = path.join(src, entry.name);
+      const destPath = path.join(dest, entry.name);
+      if (fs.existsSync(destPath)) continue;
+      if (entry.isDirectory()) {
+        this.copyDirRecursive(srcPath, destPath);
+      } else {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    }
   }
 
   // ── 셸 환경 복원 ──────────────────────────────────────────
@@ -173,6 +229,9 @@ export class ServerManager extends EventEmitter {
 
       // 1) Node.js 감지
       await this.detectNode(env);
+
+      // 1.5) 레거시 데이터 마이그레이션 (앱 번들 내 → userData)
+      this.migrateStoreIfNeeded();
 
       // 2) node_modules 없으면 설치
       const appRoot = this.getAppRoot();
@@ -294,6 +353,9 @@ export class ServerManager extends EventEmitter {
     const serverEntry = path.join(appRoot, 'dist', 'index.js');
     this.appendLog(`[electron] Starting server: node ${serverEntry}`);
 
+    const storeDir = this.getStoreDir();
+    this.appendLog(`[electron] Store directory: ${storeDir}`);
+
     this.process = spawn('node', [serverEntry], {
       cwd: appRoot,
       env: {
@@ -302,6 +364,7 @@ export class ServerManager extends EventEmitter {
         WEB_UI_ENABLED: 'true',
         WEB_UI_HOST: '127.0.0.1',
         WEB_UI_PORT: '3210',
+        AGENTSALAD_STORE_DIR: storeDir,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });

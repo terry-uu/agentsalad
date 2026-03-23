@@ -2,17 +2,20 @@
  * Workspace Manager — 에이전트/채널/타겟 3-depth 격리 파일 공간
  *
  * 멀티채널 + 멀티타겟 구조:
- *   store/workspaces/<agent>/                     — 에이전트 워크스페이스 루트
- *   store/workspaces/<agent>/_shared/             — 공용 폴더 (모든 채널, 모든 타겟 접근)
- *   store/workspaces/<agent>/<channel>/<target>/  — 채널→타겟 개인 폴더 (파일 도구 루트)
+ *   {STORE_DIR}/workspaces/<agent>/                     — 에이전트 워크스페이스 루트
+ *   {STORE_DIR}/workspaces/<agent>/_shared/             — 공용 폴더 (모든 채널, 모든 타겟 접근)
+ *   {STORE_DIR}/workspaces/<agent>/<channel>/<target>/  — 채널→타겟 개인 폴더 (파일 도구 루트)
  *
- * 커스텀 스킬: store/skills/<folder_name>/ — 사용자/LLM 에이전트가 직접 편집하는 스킬 폴더.
+ * 커스텀 스킬: {STORE_DIR}/skills/<folder_name>/ — 사용자/LLM 에이전트가 직접 편집하는 스킬 폴더.
  * 크로스 플랫폼: run.sh(macOS/Linux) + run.cmd(Windows) 양쪽 템플릿 생성.
+ *
+ * 경로 기준: config.ts의 STORE_DIR을 import하여 사용.
+ * Electron 패키징 시 AGENTSALAD_STORE_DIR 환경변수로 userData 경로가 주입되므로
+ * 앱 업데이트 시에도 사용자 데이터가 보존된다.
  *
  * 폴더명은 folder_name 기준으로 고정되고, 표시명과 분리된다.
  * 인메모리 맵(id → folder_name)으로 경로 해석.
  * 이름 변경 시 물리 폴더도 renameSync으로 추적.
- * 최근 수정: target 워크스페이스도 nickname 대신 targets.folder_name을 우선 사용.
  */
 import {
   mkdirSync,
@@ -24,8 +27,10 @@ import {
 } from 'fs';
 import { resolve, join } from 'path';
 
-const WORKSPACES_ROOT = resolve(process.cwd(), 'store', 'workspaces');
-const SKILLS_ROOT = resolve(process.cwd(), 'store', 'skills');
+import { STORE_DIR } from '../config.js';
+
+const WORKSPACES_ROOT = join(STORE_DIR, 'workspaces');
+const SKILLS_ROOT = join(STORE_DIR, 'skills');
 
 // ── 인메모리 폴더명 맵 (id → folder_name) ──
 
