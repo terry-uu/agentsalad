@@ -10,7 +10,7 @@ Agent Salad의 빌드, 배포, 릴리스 워크플로우.
 | `public` | `terry-uu/agentsalad` | 릴리스 에셋 + 랜딩 페이지 (public) |
 
 - **소스 코드 푸시**: `origin` (private)에만 한다.
-- **퍼블릭 리포**: 릴리스 파일(.dmg, .zip) 업로드 + `docs/` 랜딩 페이지 반영 전용. 소스 코드를 통째로 푸시하지 않는다.
+- **퍼블릭 리포**: 릴리스 파일(.dmg, .zip, .exe) 업로드 + `docs/` 랜딩 페이지 반영 전용. 소스 코드를 통째로 푸시하지 않는다.
 - **랜딩 페이지**: `docs/index.html` — public 리포의 GitHub Pages로 서빙. https://terry-uu.github.io/agentsalad/
 
 ## 빌드 & 패키징
@@ -21,7 +21,9 @@ Agent Salad의 빌드, 배포, 릴리스 워크플로우.
 npm run build          # src/ → dist/
 ```
 
-### 2. Electron 패키징 (macOS arm64)
+### 2. Electron 패키징
+
+각 플랫폼의 네이티브 머신에서 실행해야 한다.
 
 ```bash
 npm run electron:build
@@ -31,13 +33,41 @@ npm run electron:build
 1. `npm run build` — TypeScript 컴파일
 2. `npm run build:electron` — Electron 코드 컴파일 (`electron/` → `dist-electron/`)
 3. `npm run electron:prepare` — `build/app-server-pkg/package.json` 생성 (런타임 의존성만 추출)
-4. `electron-builder` — `.dmg` + `.zip` 생성 → `release/` 디렉토리
+4. `electron-builder` — 플랫폼별 인스톨러 생성 → `release/` 디렉토리
 
 빌드 결과물:
-- `release/Agent Salad-{version}-arm64.dmg` — macOS 설치 이미지
-- `release/Agent Salad-{version}-arm64-mac.zip` — macOS 자동 업데이트용
+
+| 플랫폼 | 파일 | 용도 |
+|--------|------|------|
+| macOS | `release/Agent Salad-{version}-arm64.dmg` | macOS 설치 이미지 |
+| macOS | `release/Agent Salad-{version}-arm64-mac.zip` | macOS 자동 업데이트용 |
+| Windows | `release/Agent Salad Setup {version}.exe` | Windows NSIS 인스톨러 |
 
 > `GH_TOKEN` 미설정 시 자동 업로드 단계에서 exit code 1이 나오지만, 빌드 자체는 성공한 것이다. 에셋 파일이 `release/`에 정상 생성되었는지만 확인하면 된다.
+
+#### Windows 빌드 시 알려진 이슈
+
+electron-builder v26의 `winCodeSign-2.6.0.7z` 아카이브에 macOS 심볼릭 링크가 포함되어 있어, 관리자 권한 없는 Windows에서 추출 실패한다 ([#8149](https://github.com/electron-userland/electron-builder/issues/8149)).
+
+**해결법 (최초 1회):** winCodeSign 캐시를 수동으로 미리 추출해둔다.
+
+```powershell
+# 1. 캐시 디렉토리 생성
+$cacheDir = "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign"
+New-Item -ItemType Directory -Path $cacheDir -Force
+
+# 2. 아카이브 다운로드
+$url = "https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z"
+Invoke-WebRequest -Uri $url -OutFile "$cacheDir\winCodeSign-2.6.0.7z" -UseBasicParsing
+
+# 3. 7za로 추출 (심볼릭 링크 에러 2개는 macOS 전용이므로 무시)
+& "node_modules\7zip-bin\win\x64\7za.exe" x -bd "$cacheDir\winCodeSign-2.6.0.7z" "-o$cacheDir\winCodeSign-2.6.0" -y
+
+# 4. 아카이브 삭제
+Remove-Item "$cacheDir\winCodeSign-2.6.0.7z"
+```
+
+추출 시 `libcrypto.dylib`, `libssl.dylib` 심볼릭 링크 에러(exit code 2)가 나오지만, 실제 Windows 빌드에 필요한 `rcedit-x64.exe` 등은 정상 추출된다. 캐시가 존재하면 이후 빌드에서 자동으로 재사용한다.
 
 ## 릴리스 절차 (전체 플로우)
 
@@ -63,11 +93,13 @@ npm run electron:build
 # 기존 에셋 삭제
 gh release delete-asset v{VERSION} "Agent.Salad-{VERSION}-arm64-mac.zip" --repo terry-uu/agentsalad --yes
 gh release delete-asset v{VERSION} "Agent.Salad-{VERSION}-arm64.dmg" --repo terry-uu/agentsalad --yes
+gh release delete-asset v{VERSION} "Agent.Salad.Setup.{VERSION}.exe" --repo terry-uu/agentsalad --yes
 
-# 새 에셋 업로드
+# 새 에셋 업로드 (macOS + Windows)
 gh release upload v{VERSION} \
   "release/Agent Salad-{VERSION}-arm64-mac.zip" \
   "release/Agent Salad-{VERSION}-arm64.dmg" \
+  "release/Agent Salad Setup {VERSION}.exe" \
   --repo terry-uu/agentsalad
 ```
 
@@ -108,6 +140,7 @@ https://github.com/terry-uu/agentsalad/releases/download/v{VERSION}/Agent.Salad-
 gh release create v{VERSION} \
   "release/Agent Salad-{VERSION}-arm64-mac.zip" \
   "release/Agent Salad-{VERSION}-arm64.dmg" \
+  "release/Agent Salad Setup {VERSION}.exe" \
   --repo terry-uu/agentsalad \
   --title "v{VERSION} — 릴리스 제목" \
   --notes "릴리스 노트 내용"
@@ -128,7 +161,7 @@ gh release create v{VERSION} \
 - [ ] TypeScript 빌드 성공 (`npm run build`)
 - [ ] 테스트 통과 (`npm test`)
 - [ ] Electron 패키징 성공 (`npm run electron:build`)
-- [ ] `release/` 디렉토리에 .dmg + .zip 생성 확인
+- [ ] `release/` 디렉토리에 빌드 결과물 생성 확인 (macOS: .dmg + .zip / Windows: .exe)
 - [ ] private 리포 푸시 (`origin`)
 - [ ] public 릴리스 에셋 교체 (`gh release upload`)
 - [ ] 랜딩 페이지 변경 시 public 리포 반영 (`gh api` 파일 업데이트)

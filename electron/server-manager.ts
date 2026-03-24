@@ -6,10 +6,14 @@
  *
  * PATH 복원: macOS GUI 앱은 터미널 PATH를 상속받지 못함.
  * 로그인 셸($SHELL -lc)에서 실제 PATH를 가져와 모든 child_process에 주입.
+ * Windows는 GUI도 시스템 PATH를 상속하므로 불필요.
  *
  * 데이터 영속성: 패키징 시 AGENTSALAD_STORE_DIR을 app.getPath('userData')/store로
  * 설정하여 앱 번들 외부에 DB/워크스페이스를 저장. 앱 업데이트 시에도 데이터 보존.
  * 레거시 데이터(앱 번들 내 store/)가 있으면 자동 마이그레이션.
+ *
+ * Windows 호환: Node.js v22+ 보안 패치(CVE-2024-27980)로 .cmd/.bat 파일의
+ * 직접 spawn이 차단됨. npm.cmd 호출 시 shell: true 필수.
  *
  * 상태 흐름:
  *   stopped → (start)
@@ -305,17 +309,27 @@ export class ServerManager extends EventEmitter {
       this.appendLog('[setup] Installing dependencies (npm install)...');
       this.appendLog('[setup] This may take a minute on first launch.');
 
-      const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      const isWin = process.platform === 'win32';
       const child = spawn(
-        npmCmd,
+        isWin ? 'npm.cmd' : 'npm',
         ['install', '--production', '--no-optional'],
         {
           cwd: appRoot,
           env,
           stdio: ['ignore', 'pipe', 'pipe'],
-          timeout: INSTALL_TIMEOUT_MS,
+          shell: isWin,
         },
       );
+
+      // spawn의 timeout 옵션은 Windows에서 문제를 일으킬 수 있으므로 수동 구현
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          child.kill();
+          reject(new Error(`npm install timed out after ${INSTALL_TIMEOUT_MS / 1000}s`));
+        }
+      }, INSTALL_TIMEOUT_MS);
 
       child.stdout?.on('data', (chunk: Buffer) => {
         const line = chunk.toString().trimEnd();
@@ -330,15 +344,23 @@ export class ServerManager extends EventEmitter {
       });
 
       child.on('error', (err) => {
-        reject(new Error(`npm install failed: ${err.message}`));
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(new Error(`npm install failed: ${err.message}`));
+        }
       });
 
       child.on('exit', (code) => {
-        if (code === 0) {
-          this.appendLog('[setup] Dependencies installed successfully.');
-          resolve();
-        } else {
-          reject(new Error(`npm install exited with code ${code}`));
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          if (code === 0) {
+            this.appendLog('[setup] Dependencies installed successfully.');
+            resolve();
+          } else {
+            reject(new Error(`npm install exited with code ${code}`));
+          }
         }
       });
     });
