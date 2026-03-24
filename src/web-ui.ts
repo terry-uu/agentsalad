@@ -6,6 +6,9 @@
  * Agents 탭: 에이전트 상세 설정 (스킬, 프롬프트)
  * Skills 탭: 기본/커스텀 스킬 카탈로그
  *
+ * 크론 스킬 힌트: 체크박스 value를 skill ID로 저장, 검증 시 빌트인+커스텀 모두 체크.
+ * 서비스 폴더 열기: 샐러드 카드에서 📂 버튼으로 해당 서비스의 workspace 폴더를 OS에서 오픈.
+ *
  * 멀티채널: Telegram/Discord/Slack 페어링 API 지원 (채널 타입별 분기).
  * everyone UI는 공용 블록 1개로 합쳐 상단에 노출, 퍼블릭 숨김 토글로 제어.
  *
@@ -156,6 +159,11 @@ export interface WebUiContext {
     subdir?: string,
   ) => Array<{ name: string; type: string; size?: number }>;
   getWorkspacePath: (agentId: string) => string;
+  getTargetWorkspacePath: (
+    agentId: string,
+    channelId: string,
+    targetFolderRef: string,
+  ) => string;
   // Skill script files
   getSkillScriptPath: (skillId: string) => string;
   getSkillScriptDir: (skillId: string) => string;
@@ -2197,6 +2205,12 @@ async function openWorkspace(btn,agentId){
   btn.textContent=t('opened');
   setTimeout(()=>{btn.textContent=orig;btn.disabled=false},1500);
 }
+async function openSvcWorkspace(btn,serviceId){
+  const orig=btn.textContent;btn.textContent=t('opening');btn.disabled=true;
+  await api('/api/services/'+encodeURIComponent(serviceId)+'/workspace/open','POST');
+  btn.textContent=t('opened');
+  setTimeout(()=>{btn.textContent=orig;btn.disabled=false},1500);
+}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('detailBg').classList.contains('show'))closeDetail()});
 
 const SKILL_IDS=['file_read','file_write','file_list','web_fetch','web_browse','bash','google_gmail','google_calendar','google_drive','cron'];
@@ -2430,6 +2444,7 @@ function renderServices(){
         '<div class="svc-icon'+(allActive?' spinning':'')+'">'+(allActive?'🥗':'🍽️')+'</div>'+
         '<div class="svc-body"><div class="svc-title">'+svcDescHtml(agName,chName,t('everyoneTarget'))+(warns.length?' <span style="color:var(--red);font-size:.7rem">\\u26A0</span>':'')+'</div></div>'+
         '<div class="svc-status">'+
+        '<button class="btn btn-g btn-sm" onclick="event.stopPropagation();openWorkspace(this,\\''+esc(g.agentId)+'\\')">📂</button>'+
         '<button class="btn btn-g btn-sm svc-toggle" onclick="toggleGroupSvc('+JSON.stringify(groupSvcIds).replace(/"/g,'&quot;')+',\\''+toggleAction+'\\')">'+toggleLabel+'</button>'+
         '<button class="btn-d btn-sm" onclick="delSvc(\\''+templateSvc.id+'\\')">'+t('del')+'</button>'+
         '</div></div>'+
@@ -2448,6 +2463,7 @@ function renderServices(){
         '<div class="svc-icon'+(allActive?' spinning':'')+'">'+(allActive?'🥗':'🍽️')+'</div>'+
         '<div class="svc-body"><div class="svc-title">'+svcDescHtml(agName,chName,tgName)+(warns.length?' <span style="color:var(--red);font-size:.7rem">\\u26A0</span>':'')+'</div></div>'+
         '<div class="svc-status">'+
+        '<button class="btn btn-g btn-sm" onclick="event.stopPropagation();openSvcWorkspace(this,\\''+s.id+'\\')">📂</button>'+
         (allActive?'<button class="btn btn-g btn-sm svc-toggle" onclick="toggleSvc(\\''+s.id+'\\',\\'paused\\')">'+t('pause')+'</button>':'<button class="btn btn-g btn-sm svc-toggle" onclick="toggleSvc(\\''+s.id+'\\',\\'active\\')">'+t('resume')+'</button>')+
         '<button class="btn-d btn-sm" onclick="delSvc(\\''+s.id+'\\')">'+t('del')+'</button>'+
         '</div></div>'+
@@ -2479,6 +2495,7 @@ function renderServices(){
         '<div class="svc-title">'+svcDescMultiHtml(agName,chName,tgNames)+(warns.length?' <span style="color:var(--red);font-size:.7rem">\\u26A0</span>':'')+'</div>'+
       '</div>'+
       '<div class="svc-status">'+
+      '<button class="btn btn-g btn-sm" onclick="event.stopPropagation();openWorkspace(this,\\''+esc(g.agentId)+'\\')">📂</button>'+
       '<button class="btn btn-g btn-sm svc-toggle" onclick="toggleGroupSvc('+JSON.stringify(groupSvcIds).replace(/"/g,'&quot;')+',\\''+toggleAction+'\\')">'+toggleLabel+'</button>'+
       '</div></div>'+
       '<div class="svc-targets-row"><span class="svc-targets-label">'+t('target')+'</span>'+targetCards+'</div>'+
@@ -3793,6 +3810,37 @@ export function startWebUiServer(
       ) {
         const agentId = decodeURIComponent(url.pathname.split('/')[3]);
         const wsPath = context.getWorkspacePath(agentId);
+        const { execSync } = await import('child_process');
+        const { existsSync, mkdirSync } = await import('fs');
+        if (!existsSync(wsPath)) mkdirSync(wsPath, { recursive: true });
+        const platform = process.platform;
+        if (platform === 'darwin') execSync(`open "${wsPath}"`);
+        else if (platform === 'win32') execSync(`explorer "${wsPath}"`);
+        else execSync(`xdg-open "${wsPath}"`);
+        sendJson(res, 200, { ok: true, path: wsPath });
+        return;
+      }
+      // Open service (salad) workspace folder
+      if (
+        url.pathname.match(/^\/api\/services\/[^/]+\/workspace\/open$/) &&
+        req.method === 'POST'
+      ) {
+        const serviceId = decodeURIComponent(url.pathname.split('/')[3]);
+        const svc = context.listServices().find((s) => s.id === serviceId);
+        if (!svc) {
+          sendJson(res, 404, { error: 'Service not found' });
+          return;
+        }
+        const target = context
+          .listTargets()
+          .find((t) => t.id === svc.target_id);
+        const targetFolder =
+          target?.folder_name || target?.target_id || svc.target_id;
+        const wsPath = context.getTargetWorkspacePath(
+          svc.agent_profile_id,
+          svc.channel_id,
+          targetFolder,
+        );
         const { execSync } = await import('child_process');
         const { existsSync, mkdirSync } = await import('fs');
         if (!existsSync(wsPath)) mkdirSync(wsPath, { recursive: true });

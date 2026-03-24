@@ -51,6 +51,7 @@ import {
 import { listBuiltinSkillMeta } from './skills/registry.js';
 import {
   getWorkspacePath,
+  getTargetWorkspacePath,
   ensureWorkspace,
   ensureSkillScript,
   removeSkillScript,
@@ -670,6 +671,8 @@ async function main(): Promise<void> {
         }
       },
       getWorkspacePath: (agentId) => getWorkspacePath(agentId),
+      getTargetWorkspacePath: (agentId, channelId, targetFolderRef) =>
+        getTargetWorkspacePath(agentId, channelId, targetFolderRef),
 
       // Cron jobs
       listCronJobs: () => listCronJobs(),
