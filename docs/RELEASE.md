@@ -75,12 +75,31 @@ gh release upload v{VERSION} \
 
 `docs/index.html`이 변경되었다면 public 리포에 반영한다. GitHub Pages가 자동으로 재배포한다.
 
+private/public 리포는 히스토리가 다르므로 `git push`가 아니라 **GitHub API로 파일을 직접 업데이트**한다:
+
 ```bash
-# docs/index.html 변경분만 public에 푸시
-git push public fresh-main:main -- docs/
+# 1. 현재 파일의 SHA 조회
+SHA=$(gh api repos/terry-uu/agentsalad/contents/docs/index.html --jq '.sha')
+
+# 2. 로컬 파일을 base64 인코딩하여 업데이트
+CONTENT=$(base64 -i docs/index.html)
+gh api repos/terry-uu/agentsalad/contents/docs/index.html \
+  -X PUT \
+  -f message="docs: 랜딩 페이지 업데이트" \
+  -f content="$CONTENT" \
+  -f sha="$SHA"
 ```
 
-또는 변경 파일이 docs만이 아닌 경우, public 리포에서 직접 파일을 업로드한다.
+### 다운로드 URL 관리
+
+`docs/index.html`의 다운로드 버튼은 DMG 직접 다운로드 URL을 사용한다:
+```
+https://github.com/terry-uu/agentsalad/releases/download/v{VERSION}/Agent.Salad-{VERSION}-arm64.dmg
+```
+
+**버전 업 시 `docs/index.html`의 다운로드 URL도 함께 변경해야 한다.** hero 버튼과 하단 다운로드 섹션 버튼 모두 확인할 것.
+
+> public 릴리스의 "Source code (zip/tar.gz)"는 GitHub 자동 생성이며 삭제 불가. public 리포에는 LICENSE, PHILOSOPHY.md, docs/만 있으므로 실제 소스 코드 유출 없음.
 
 ### 새 버전 릴리스 생성 (버전 업 시)
 
@@ -112,4 +131,5 @@ gh release create v{VERSION} \
 - [ ] `release/` 디렉토리에 .dmg + .zip 생성 확인
 - [ ] private 리포 푸시 (`origin`)
 - [ ] public 릴리스 에셋 교체 (`gh release upload`)
-- [ ] 랜딩 페이지 변경 시 public 리포 반영 (GitHub Pages)
+- [ ] 랜딩 페이지 변경 시 public 리포 반영 (`gh api` 파일 업데이트)
+- [ ] 버전 업 시 `docs/index.html` 다운로드 URL 갱신 확인
