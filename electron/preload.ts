@@ -3,6 +3,7 @@
  *
  * contextBridge로 안전하게 electronAPI를 renderer에 노출.
  * renderer에서 window.electronAPI.xxx() 형태로 호출.
+ * getAppInfo/openExternal: 에러 화면 → Google Form 이슈 리포트용.
  */
 import { contextBridge, ipcRenderer } from 'electron';
 
@@ -11,6 +12,8 @@ export interface ElectronAPI {
   stopServer: () => Promise<void>;
   getStatus: () => Promise<string>;
   getLogs: () => Promise<string[]>;
+  getAppInfo: () => Promise<{ version: string; os: string }>;
+  openExternal: (url: string) => Promise<void>;
   onStatusChanged: (callback: (status: string) => void) => void;
   onLog: (callback: (line: string) => void) => void;
   removeAllListeners: () => void;
@@ -21,6 +24,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopServer: () => ipcRenderer.invoke('server:stop'),
   getStatus: () => ipcRenderer.invoke('server:status'),
   getLogs: () => ipcRenderer.invoke('server:logs'),
+  getAppInfo: () => ipcRenderer.invoke('server:app-info'),
+  openExternal: (url: string) => ipcRenderer.invoke('server:open-external', url),
 
   onStatusChanged: (callback: (status: string) => void) => {
     ipcRenderer.on('server:status-changed', (_event, status: string) => {

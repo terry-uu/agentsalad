@@ -10,6 +10,7 @@
  * everyone UI는 공용 블록 1개로 합쳐 상단에 노출, 퍼블릭 숨김 토글로 제어.
  *
  * 최근 수정 요약:
+ * - 사이드바 하단에 Discord 커뮤니티 링크 추가 (sidebar-footer)
  * - API Key Settings 모달을 카드형 레이아웃으로 리디자인 (프로바이더별 카드 + 상태 뱃지 + 키 발급 링크)
  * - 4개 언어 Slack 셋업 가이드를 manifest 기반 플로우로 통일 (en/ja/zh가 ko와 동일)
  * - 하드코딩 영어 문자열 ('Active Services', 'service') i18n 키로 교체
@@ -250,6 +251,9 @@ body{margin:0;position:relative}
 .sidebar-logo .logo-help{font-size:.82rem;color:var(--t3);text-decoration:none;padding:2px 6px;border-radius:50%;border:1px solid var(--border);line-height:1;transition:.12s}
 .sidebar-logo .logo-help:hover{background:var(--s2);color:var(--t1)}
 .sidebar-blocks{flex:1;overflow-y:auto;padding:10px 12px}
+.sidebar-footer{padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0}
+.sidebar-footer-link{display:flex;align-items:center;gap:6px;font-size:.76rem;color:var(--t3);text-decoration:none;padding:4px 6px;border-radius:6px;transition:.12s}
+.sidebar-footer-link:hover{color:var(--t1);background:var(--s2)}
 .sidebar-blocks .block-col{margin-bottom:12px}
 .sidebar-blocks .block-col:last-child{margin-bottom:0}
 .sidebar-blocks .col-desc{display:none}
@@ -604,6 +608,12 @@ input[type=checkbox]{accent-color:var(--green);cursor:pointer}
       </div>
       <div id="crBlocks" class="cron-blocks"></div>
     </div>
+  </div>
+  <div class="sidebar-footer">
+    <a href="https://discord.gg/smtDTRH4" target="_blank" class="sidebar-footer-link" title="Discord Community">
+      <svg width="16" height="12" viewBox="0 0 71 55" fill="none"><path d="M60.1 4.9A58.5 58.5 0 0045.4.2a.2.2 0 00-.2.1 40.8 40.8 0 00-1.8 3.7 54 54 0 00-16.2 0A37.4 37.4 0 0025.4.3a.2.2 0 00-.2-.1A58.4 58.4 0 0010.5 4.9a.2.2 0 00-.1.1C1.5 18.7-.9 32.2.3 45.5v.2a58.9 58.9 0 0017.7 9a.2.2 0 00.3-.1 42 42 0 003.6-5.9.2.2 0 00-.1-.3 38.8 38.8 0 01-5.5-2.6.2.2 0 01 0-.4l1.1-.9a.2.2 0 01.2 0 42 42 0 0035.6 0 .2.2 0 01.2 0l1.1.9a.2.2 0 010 .3 36.4 36.4 0 01-5.5 2.7.2.2 0 00-.1.3 47.2 47.2 0 003.6 5.9.2.2 0 00.3.1A58.7 58.7 0 0070.5 45.7v-.2c1.4-15-2.3-28-9.8-39.6a.2.2 0 00-.1 0zM23.7 37.3c-3.4 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.1 6.3 7-2.8 7-6.3 7zm23.3 0c-3.4 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.1 6.3 7-2.8 7-6.3 7z" fill="currentColor"/></svg>
+      <span>Community</span>
+    </a>
   </div>
 </aside>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>

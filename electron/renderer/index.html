@@ -53,6 +53,8 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:cente
 .btn-stop:hover{background:#C62828;box-shadow:var(--shadow-md)}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 .btn-sm{font-size:.8rem;padding:8px 20px;min-width:auto;opacity:.7}
+.btn-report{background:var(--s1);color:var(--t2);border:1px solid var(--border);box-shadow:var(--shadow);font-size:.8rem;padding:8px 20px;min-width:auto}
+.btn-report:hover{background:var(--s2);box-shadow:var(--shadow-md)}
 
 .spinner{width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
 .spinner.blue{border-top-color:var(--blue)}
@@ -115,7 +117,10 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:cente
   <div data-view="error">
     <div class="status-badge error"><span class="dot"></span>Error</div>
     <div class="error-msg" id="error-msg">Failed to start server.</div>
-    <button class="btn btn-start" id="btn-retry">Retry</button>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="btn btn-start" id="btn-retry">Retry</button>
+      <button class="btn btn-report" id="btn-report">Report Issue</button>
+    </div>
   </div>
 
   <!-- Log Area -->
@@ -162,8 +167,42 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:cente
     logToggle.textContent = logVisible ? '▾ Server Logs' : '▸ Server Logs';
   });
 
+  function collectLogs() {
+    if (!logBox) return '';
+    var lines = [];
+    for (var i = 0; i < logBox.children.length; i++) {
+      lines.push(logBox.children[i].textContent || '');
+    }
+    var maxLines = 50;
+    var maxChars = 2000;
+    var recent = lines.slice(-maxLines);
+    var text = recent.join('\n');
+    if (text.length > maxChars) {
+      text = text.slice(-maxChars);
+      text = '[... truncated]\n' + text;
+    } else if (lines.length > maxLines) {
+      text = '[... truncated, showing last ' + maxLines + ' lines]\n' + text;
+    }
+    return text;
+  }
+
+  async function reportIssue() {
+    var info = { version: 'unknown', os: 'unknown' };
+    try { info = await api.getAppInfo(); } catch (e) {}
+    var logs = collectLogs();
+    var formBase = 'https://docs.google.com/forms/d/e/1FAIpQLSc4mHqDL5QRUCUyMbSWKaedZtwEqKkRus6IPLVmG6zFwSKCiw/viewform';
+    var params = new URLSearchParams();
+    params.set('usp', 'pp_url');
+    params.set('entry.197112167', logs);
+    params.set('entry.1973745459', info.os);
+    params.set('entry.852977825', info.version);
+    var url = formBase + '?' + params.toString();
+    api.openExternal(url);
+  }
+
   document.getElementById('btn-start')?.addEventListener('click', () => api.startServer());
   document.getElementById('btn-retry')?.addEventListener('click', () => api.startServer());
+  document.getElementById('btn-report')?.addEventListener('click', () => reportIssue());
   document.getElementById('btn-stop-starting')?.addEventListener('click', () => api.stopServer());
   document.getElementById('btn-stop-installing')?.addEventListener('click', () => api.stopServer());
 

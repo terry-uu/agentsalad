@@ -8,6 +8,9 @@
  * 트레이 아이콘: 상태별 컬러 원형 — 원시 RGBA에서 PNG 직접 생성.
  * 외부 링크: 127.0.0.1:3210 / file:// 외 URL은 시스템 브라우저로 열림.
  *
+ * IPC: server:start/stop/status/logs + server:app-info(버전/OS) + server:open-external(URL).
+ * app-info/open-external은 에러 화면의 Google Form 이슈 리포트에서 사용.
+ *
  * 동작:
  *  - X 버튼 → 창 숨김 (트레이에 유지, 서버 계속 동작)
  *  - 트레이 Quit / Cmd+Q → 서버 kill + 앱 완전 종료
@@ -24,6 +27,7 @@ import {
   type NativeImage,
 } from 'electron';
 import path from 'path';
+import os from 'os';
 import zlib from 'zlib';
 import { ServerManager, type ServerStatus } from './server-manager';
 import { startUpdateChecker, stopUpdateChecker, getAvailableUpdate, openReleasePage } from './update-checker';
@@ -309,6 +313,20 @@ function setupIPC(): void {
 
   ipcMain.handle('server:logs', () => {
     return serverManager.logs;
+  });
+
+  ipcMain.handle('server:app-info', () => {
+    const platform = process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux';
+    return {
+      version: app.getVersion(),
+      os: `${platform} ${os.release()}`,
+    };
+  });
+
+  ipcMain.handle('server:open-external', (_event, url: string) => {
+    if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+      shell.openExternal(url);
+    }
   });
 }
 
