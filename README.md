@@ -134,8 +134,6 @@ Vibe coding has narrowed the gap between developers and everyone else. But the r
 
 So I decided: **if my friend buys a Mac Mini, I'll make the easiest possible agent platform she can install and use immediately.** And if even that's too hard, I'll set up the agent myself and serve it to her Telegram directly.
 
-That's when I found [NanoClaw](https://github.com/qwibitai/nanoclaw). Learned a lot from it. Grateful for it.
-
 What I actually built is this: I took complex agent platform concepts, defined them, grouped them, and visualized them. If you can read text and try things — you can run an agent on your own machine and serve it to your family, friends, and coworkers.
 
 It's not perfect. But I'll keep improving it.
