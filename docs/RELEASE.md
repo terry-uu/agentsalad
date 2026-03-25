@@ -69,9 +69,57 @@ Remove-Item "$cacheDir\winCodeSign-2.6.0.7z"
 
 추출 시 `libcrypto.dylib`, `libssl.dylib` 심볼릭 링크 에러(exit code 2)가 나오지만, 실제 Windows 빌드에 필요한 `rcedit-x64.exe` 등은 정상 추출된다. 캐시가 존재하면 이후 빌드에서 자동으로 재사용한다.
 
+## CI/CD (GitHub Actions)
+
+`.github/workflows/electron-build.yml` — main 푸시마다 자동 빌드, 태그 푸시 시 public 릴리스 자동 업로드.
+
+### 동작 방식
+
+| 트리거 | 빌드 | 릴리스 업로드 |
+|--------|------|--------------|
+| `push` to `main` | macOS + Windows 빌드 → Actions Artifacts | X |
+| `push` tag `v*` | macOS + Windows 빌드 → Actions Artifacts | public 리포 릴리스에 자동 업로드 |
+
+빌드 매트릭스:
+- `macos-14` (Apple Silicon arm64): `.dmg` + `.zip`
+- `windows-latest` (x64): `.exe` (NSIS)
+
+빌드 스텝은 로컬 `npm run electron:build`와 동일한 4단계를 순서대로 실행한다:
+1. `npm run build` — TypeScript 컴파일
+2. `npm run build:electron` — Electron 코드 컴파일
+3. `npm run electron:prepare` — app-server package.json 생성
+4. `npx electron-builder --publish never` — 인스톨러 생성
+
+macOS에서는 `CSC_IDENTITY_AUTO_DISCOVERY=false`로 코드 서명을 건너뛴다 (Apple Developer 인증서 미설정).
+
+### 사전 준비: PAT 시크릿
+
+태그 릴리스 자동 업로드를 위해 **Personal Access Token**이 필요하다.
+
+1. GitHub → Settings → Developer settings → Personal access tokens → **Generate new token (classic)**
+2. Scope: `repo` (Full control of private repositories) 선택
+3. 생성된 토큰 복사
+4. private 리포(`terry-uu/agentsalad-private`) → Settings → Secrets and variables → Actions
+5. **New repository secret**: Name = `PUBLIC_REPO_TOKEN`, Value = 복사한 토큰
+
+### 태그 기반 릴리스
+
+```bash
+# 1. package.json version 업데이트 + 커밋
+# 2. 태그 생성 + 푸시
+git tag v0.2.0
+git push origin main --tags
+# 3. GitHub Actions가 자동으로:
+#    - macOS + Windows 빌드
+#    - public 리포 릴리스(v0.2.0)에 에셋 업로드
+```
+
+> public 리포에 해당 태그의 릴리스가 미리 존재해야 한다. 릴리스가 없으면 업로드가 실패한다.
+> 새 버전 최초 릴리스는 아래 "새 버전 릴리스 생성" 섹션의 `gh release create` 명령으로 먼저 생성한다.
+
 ## 릴리스 절차 (전체 플로우)
 
-**패키징하면 반드시 아래 전부를 수행한다.**
+CI/CD가 설정된 경우 Step 2~3이 자동화된다. 태그 푸시만으로 빌드+업로드 완료.
 
 ### Step 1. Private 푸시
 
@@ -81,13 +129,18 @@ git push origin fresh-main:main
 
 ### Step 2. Electron 패키징
 
+**CI/CD 사용 시**: Step 1에서 태그와 함께 푸시하면 자동 실행. 아래 수동 절차 불필요.
+
+**수동 빌드 시**:
 ```bash
 npm run electron:build
 ```
 
 ### Step 3. Public 릴리스 에셋 교체
 
-기존 에셋 삭제 후 새 빌드 업로드:
+**CI/CD 사용 시**: 태그 푸시 워크플로우가 자동으로 기존 에셋 삭제 + 새 에셋 업로드. 아래 수동 절차 불필요.
+
+**수동 업로드 시**:
 
 ```bash
 # 기존 에셋 삭제
@@ -160,9 +213,10 @@ gh release create v{VERSION} \
 
 - [ ] TypeScript 빌드 성공 (`npm run build`)
 - [ ] 테스트 통과 (`npm test`)
-- [ ] Electron 패키징 성공 (`npm run electron:build`)
+- [ ] Electron 패키징 성공 (`npm run electron:build` 또는 CI/CD 자동 빌드)
 - [ ] `release/` 디렉토리에 빌드 결과물 생성 확인 (macOS: .dmg + .zip / Windows: .exe)
-- [ ] private 리포 푸시 (`origin`)
-- [ ] public 릴리스 에셋 교체 (`gh release upload`)
+- [ ] private 리포 푸시 (`origin`) — CI/CD 사용 시 태그와 함께 (`--tags`)
+- [ ] public 릴리스 에셋 교체 (`gh release upload` 또는 CI/CD 자동 업로드)
 - [ ] 랜딩 페이지 변경 시 public 리포 반영 (`gh api` 파일 업데이트)
 - [ ] 버전 업 시 `docs/index.html` 다운로드 URL 갱신 확인
+- [ ] CI/CD 사용 시: `PUBLIC_REPO_TOKEN` 시크릿이 유효한지 확인

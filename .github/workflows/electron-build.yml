@@ -1,0 +1,118 @@
+# Electron 데스크톱 앱 빌드 + 릴리스 자동화
+#
+# main 푸시: macOS(arm64) + Windows(x64) 빌드 → Actions Artifacts
+# 태그 v* 푸시: 동일 빌드 → public 리포(terry-uu/agentsalad) 릴리스에 자동 업로드
+#
+# 사전 준비: private 리포 Settings > Secrets에 PUBLIC_REPO_TOKEN 등록
+# (PAT, repo 스코프, public 리포 쓰기 권한)
+
+name: Electron Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+concurrency:
+  group: electron-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: mac
+            artifact: release-mac
+          - os: windows-latest
+            platform: win
+            artifact: release-win
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies (skip playwright)
+        run: npm ci --ignore-scripts
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Build Electron
+        run: npm run build:electron
+
+      - name: Prepare app-server package
+        run: npm run electron:prepare
+
+      - name: Package Electron app
+        run: npx electron-builder --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: List build outputs
+        run: ls -la release/
+        shell: bash
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-mac
+          path: artifacts/mac
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-win
+          path: artifacts/win
+
+      - name: List all artifacts
+        run: find artifacts -type f | sort
+
+      - name: Extract version from tag
+        id: version
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to public release
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          REPO="terry-uu/agentsalad"
+
+          echo "Uploading artifacts to $REPO release $TAG"
+
+          # 기존 에셋 삭제 (존재하면). 없으면 무시.
+          for asset in artifacts/mac/* artifacts/win/*; do
+            name=$(basename "$asset")
+            gh release delete-asset "$TAG" "$name" --repo "$REPO" --yes 2>/dev/null || true
+          done
+
+          # 새 에셋 업로드
+          gh release upload "$TAG" artifacts/mac/* artifacts/win/* --repo "$REPO"
+
+          echo "Release upload complete: $TAG"
