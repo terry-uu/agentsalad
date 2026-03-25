@@ -1,28 +1,22 @@
 # Changelog
 
-All notable changes to Agent Salad will be documented in this file.
+## v0.1.1 (2026-03-26)
 
-## [0.0.0] — Initial Release
+### Bug Fixes
+- 에이전트 생성 시 시간 인지(time_aware), 스마트 스텝(smart_step), 최대 플랜 단계(max_plan_steps)가 저장되지 않던 버그 수정
+- Windows Electron npm install spawn EINVAL 오류 수정 (CVE-2024-27980)
+- 크론 스킬 힌트가 에이전트 스킬과 매칭되지 않던 버그 수정
 
-Multi-provider AI agent service platform. Agent + Channel + Target = Service.
+### Features
+- GitHub Actions CI/CD 파이프라인 (main 푸시 → 자동 빌드, 태그 푸시 → public 릴리스 자동 업로드)
+- 서비스별 워크스페이스 폴더 열기 기능
+- 랜딩 페이지 Windows 다운로드 활성화
+- 에러 리포트 (Google Form) + Discord 커뮤니티 링크
 
-### Added
-- **Service Platform model**: Agent + Channel + Target = Service
-- **Multi-provider support**: Anthropic, OpenAI, Groq, OpenRouter, OpenCode via Vercel AI SDK
-- **Web UI admin dashboard**: 3-tab layout (Agent Services / Agents / Skills), drag-and-drop service creation
-- **4-language i18n**: EN, KO, JA, ZH with browser auto-detection
-- **10 builtin skills**: file I/O, web fetch, Playwright browse, bash, Google (Gmail/Calendar/Drive), cron
-- **Custom skills**: script + prompt bundles with file-based execution, per-agent toggle
-- **Auto-compaction**: context window management with archival and recursive summarization
-- **Cron scheduler**: daily and one-time scheduled prompts with 30s polling
-- **Smart Step**: multi-step plan execution with batch loops and user interrupt detection
-- **Multi-target workspaces**: per-target subfolders with shared `_shared/` directory
-- **Light theme**: food-emoji decoration, custom alert/confirm modals
+### Chores
+- 랜딩 페이지 정리 (GitHub 리포 링크 제거, hero 노트 통일, NanoClaw 레퍼런스 제거)
+- 릴리스 & 배포 워크플로우 문서화
 
-### Removed
-- Container isolation (Docker, Apple Container)
-- Claude Agent SDK dependency (replaced with Vercel AI SDK)
-- Channel registry pattern (Telegram direct integration)
-- IPC file-based communication
-- Group-centric architecture
-- MCP server infrastructure
+## v0.1.0 (2026-03-23)
+
+- First Public Beta

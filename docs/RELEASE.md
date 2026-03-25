@@ -207,10 +207,22 @@ gh release create v{VERSION} \
 | 스테이징 | 라이브 테스트 | 실제 메신저 채널 연결 테스트 |
 | 프로덕션 | 사용자 배포 | 사용자 동의 후에만 배포 |
 
+## 버전업 절차
+
+버전을 올릴 때 반드시 아래 순서를 따른다:
+
+1. `package.json`의 `version` 필드 업데이트
+2. `CHANGELOG.md`에 새 버전 섹션 추가 (Bug Fixes / Features / Chores 분류)
+3. `docs/index.html`의 다운로드 URL 버전 갱신 (hero 버튼 + 하단 다운로드 섹션)
+4. 커밋 → 태그 생성 → 푸시
+
 ## 체크리스트
 
 패키징 시 **전부 수행**:
 
+- [ ] `package.json` 버전 업데이트
+- [ ] `CHANGELOG.md` 작성
+- [ ] `docs/index.html` 다운로드 URL 갱신
 - [ ] TypeScript 빌드 성공 (`npm run build`)
 - [ ] 테스트 통과 (`npm test`)
 - [ ] Electron 패키징 성공 (`npm run electron:build` 또는 CI/CD 자동 빌드)
@@ -218,5 +230,4 @@ gh release create v{VERSION} \
 - [ ] private 리포 푸시 (`origin`) — CI/CD 사용 시 태그와 함께 (`--tags`)
 - [ ] public 릴리스 에셋 교체 (`gh release upload` 또는 CI/CD 자동 업로드)
 - [ ] 랜딩 페이지 변경 시 public 리포 반영 (`gh api` 파일 업데이트)
-- [ ] 버전 업 시 `docs/index.html` 다운로드 URL 갱신 확인
 - [ ] CI/CD 사용 시: `PUBLIC_REPO_TOKEN` 시크릿이 유효한지 확인
