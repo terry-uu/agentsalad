@@ -358,8 +358,9 @@ describe('DB creates in STORE_DIR', () => {
       id: 'cron-morning',
       name: 'Morning Briefing',
       prompt: 'Give me a morning briefing with weather and news.',
-      scheduleType: 'daily',
+      scheduleType: 'weekly',
       scheduleTime: '08:00',
+      scheduleDays: '0,1,2,3,4,5,6',
       notify: true,
     });
     db.createCronJob({

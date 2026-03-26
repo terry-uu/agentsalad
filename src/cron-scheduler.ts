@@ -3,7 +3,10 @@
  *
  * 10초 간격으로 service_crons 테이블의 due 작업을 체크하여
  * service-router의 processCronMessage를 통해 실행.
- * daily 크론은 다음 날 같은 시간으로, once 크론은 실행 후 삭제.
+ * schedule_type별 next_run 계산:
+ *   weekly: 다음 매칭 요일+시간 (구 daily 통합 — 전체요일 선택 시 매일 반복)
+ *   once: 실행 후 삭제
+ *   interval: now + interval_minutes
  *
  * 제한적 병렬 실행: worker pool 패턴으로 최대 CRON_CONCURRENCY개 동시 처리.
  * - 서로 다른 서비스의 크론은 병렬로 실행해 지연 최소화
@@ -28,22 +31,50 @@ const CRON_CONCURRENCY = 3;
 let running = false;
 
 /**
- * daily 크론의 next_run을 다음 날 같은 시간으로 계산.
- * 시스템 타임존 기준으로 HH:MM을 해석.
+ * weekly 크론의 next_run 계산.
+ * days 배열(0=일..6=토)에서 현재 시점 이후 가장 가까운 요일+시간을 찾는다.
+ * 오늘이 매칭 요일이고 아직 시간이 안 지났으면 오늘 실행.
  */
-export function computeDailyNextRun(timeHHMM: string): string {
+export function computeWeeklyNextRun(
+  timeHHMM: string,
+  days: number[],
+): string | null {
+  if (days.length === 0) return null;
   const [h, m] = timeHHMM.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+
   const now = new Date();
+  const currentDay = now.getDay();
 
-  const todayAtTime = new Date(now);
-  todayAtTime.setHours(h, m, 0, 0);
+  // 오늘 포함 7일 범위에서 가장 가까운 매칭 찾기
+  for (let offset = 0; offset <= 7; offset++) {
+    const candidateDay = (currentDay + offset) % 7;
+    if (!days.includes(candidateDay)) continue;
 
-  const next =
-    todayAtTime.getTime() > now.getTime()
-      ? todayAtTime
-      : new Date(todayAtTime.getTime() + 24 * 60 * 60 * 1000);
+    const candidate = new Date(now);
+    candidate.setDate(now.getDate() + offset);
+    candidate.setHours(h, m, 0, 0);
 
-  return next.toISOString();
+    if (candidate.getTime() > now.getTime()) {
+      return candidate.toISOString();
+    }
+  }
+
+  // fallback: 다음 주 첫 매칭 요일 (위 루프에서 반드시 걸리지만 안전장치)
+  const sorted = [...days].sort((a, b) => a - b);
+  const daysUntil = ((sorted[0] - currentDay + 7) % 7) || 7;
+  const fallback = new Date(now);
+  fallback.setDate(now.getDate() + daysUntil);
+  fallback.setHours(h, m, 0, 0);
+  return fallback.toISOString();
+}
+
+/**
+ * interval 크론의 next_run 계산.
+ * 현재 시점에서 intervalMinutes 뒤.
+ */
+export function computeIntervalNextRun(intervalMinutes: number): string {
+  return new Date(Date.now() + intervalMinutes * 60_000).toISOString();
 }
 
 /**
@@ -56,8 +87,40 @@ export function computeOnceNextRun(isoDatetime: string): string | null {
   return target.toISOString();
 }
 
-function buildScheduleLabel(type: string, time: string): string {
-  if (type === 'daily') return `매일 ${time}`;
+/** weekly schedule_days 문자열을 숫자 배열로 파싱 */
+export function parseScheduleDays(
+  scheduleDays: string | null | undefined,
+): number[] {
+  if (!scheduleDays) return [];
+  return scheduleDays
+    .split(',')
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !isNaN(n) && n >= 0 && n <= 6);
+}
+
+const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+
+function buildScheduleLabel(
+  type: string,
+  time: string,
+  intervalMinutes?: number | null,
+  scheduleDays?: string | null,
+): string {
+  if (type === 'weekly') {
+    const days = parseScheduleDays(scheduleDays);
+    const dayStr =
+      days.length === 7
+        ? '매일'
+        : days.map((d) => DAY_LABELS[d]).join(',');
+    return `${dayStr} ${time}`;
+  }
+  if (type === 'interval' && intervalMinutes) {
+    const label =
+      intervalMinutes >= 60
+        ? `${intervalMinutes / 60}시간`
+        : `${intervalMinutes}분`;
+    return `${label}마다`;
+  }
   const d = new Date(time);
   if (isNaN(d.getTime())) return `단발 ${time}`;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -94,6 +157,8 @@ async function processItem(item: DueItem): Promise<boolean> {
   const scheduleLabel = buildScheduleLabel(
     item.schedule_type,
     item.schedule_time,
+    item.interval_minutes,
+    item.schedule_days,
   );
   const notify = item.notify === 1;
   const target = getTargetById(item.target_id);
@@ -147,12 +212,18 @@ async function tick(): Promise<void> {
       async (item) => {
         const ok = await processItem(item);
         if (ok) {
-          if (item.schedule_type === 'daily') {
-            const nextRun = computeDailyNextRun(item.schedule_time);
-            updateServiceCronAfterRun(item.service_id, item.cron_id, nextRun);
-          } else {
-            updateServiceCronAfterRun(item.service_id, item.cron_id, null);
+          let nextRun: string | null = null;
+          if (item.schedule_type === 'weekly') {
+            const days = parseScheduleDays(item.schedule_days);
+            nextRun = computeWeeklyNextRun(item.schedule_time, days);
+          } else if (
+            item.schedule_type === 'interval' &&
+            item.interval_minutes
+          ) {
+            nextRun = computeIntervalNextRun(item.interval_minutes);
           }
+          // once → nextRun stays null → service_cron 삭제
+          updateServiceCronAfterRun(item.service_id, item.cron_id, nextRun);
         } else {
           logger.warn(
             { serviceId: item.service_id, cronId: item.cron_id },

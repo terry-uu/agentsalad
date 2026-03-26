@@ -13,11 +13,10 @@
  * everyone UI는 공용 블록 1개로 합쳐 상단에 노출, 퍼블릭 숨김 토글로 제어.
  *
  * 최근 수정 요약:
- * - 사이드바 하단에 Discord 커뮤니티 링크 추가 (sidebar-footer)
- * - API Key Settings 모달을 카드형 레이아웃으로 리디자인 (프로바이더별 카드 + 상태 뱃지 + 키 발급 링크)
- * - 4개 언어 Slack 셋업 가이드를 manifest 기반 플로우로 통일 (en/ja/zh가 ko와 동일)
- * - 하드코딩 영어 문자열 ('Active Services', 'service') i18n 키로 교체
- * - 초기 HTML 한국어 깜박임 제거 (applyLang()이 채우도록 빈 문자열로 초기화)
+ * - 크론 schedule_type: daily 제거 → weekly(요일반복, 구 daily 통합) + interval(간격반복) 추가.
+ *   폼에 요일 체크박스, 간격 입력+단위, 시작시간 필드 추가. 뱃지 표시 로직 통합.
+ * - API POST/PUT에 intervalMinutes, scheduleDays 파라미터 추가.
+ * - 드래그 앤 드롭 attach 시에도 interval/weekly 메타데이터 전달.
  */
 import http from 'http';
 import { URL } from 'url';
@@ -175,8 +174,10 @@ export interface WebUiContext {
     name: string;
     prompt: string;
     skillHint?: string;
-    scheduleType: 'daily' | 'once';
+    scheduleType: 'once' | 'weekly' | 'interval';
     scheduleTime: string;
+    intervalMinutes?: number | null;
+    scheduleDays?: string | null;
     notify?: boolean;
   }) => string;
   updateCronJob: (id: string, updates: Record<string, unknown>) => void;
@@ -186,6 +187,8 @@ export interface WebUiContext {
     cronId: string,
     scheduleType: string,
     scheduleTime: string,
+    intervalMinutes?: number | null,
+    scheduleDays?: string | null,
   ) => void;
   detachCronFromService: (serviceId: string, cronId: string) => void;
   // Google integration
@@ -825,8 +828,12 @@ en:{
   name:'Name',provider:'Provider',model:'Model',systemPrompt:'System Prompt',
   create:'Create',botToken:'Bot Token',addPair:'Add & Pair',
   platform:'Platform',platformUserId:'Platform User ID',nickname:'Nickname',
-  prompt:'Prompt',schedule:'Schedule',dailyRepeat:'Daily Repeat',oneTime:'One-time',
+  prompt:'Prompt',schedule:'Schedule',weeklyRepeat:'Weekly Repeat',intervalRepeat:'Interval Repeat',oneTime:'One-time',
   time:'Time (HH:MM)',dateTime:'Date & Time',sendToChannel:'Send response to channel',
+  selectDays:'Select days',startTime:'Start time',intervalUnit:'Repeat every',
+  minutes:'min',hours:'hr',
+  daySun:'Sun',dayMon:'Mon',dayTue:'Tue',dayWed:'Wed',dayThu:'Thu',dayFri:'Fri',daySat:'Sat',
+  allDays:'All',weekdays:'Weekdays',
   noServices:'No salads yet. Drag an Agent, Channel, and Target into the slots above to make one.',
   noAgents:'No agents yet',noChannels:'No channels yet',noTargets:'No targets yet',noCrons:'No schedules yet',
   agentSkillConfig:'Agent Skill Configuration',selectAgent:'Select Agent:',
@@ -949,7 +956,7 @@ en:{
   cronPromptHint:'Tell the agent what to do at the set time. e.g. "Summarize today\\'s top news"',
   phCronName:'Daily news summary',phCronPrompt:'Instructions to send to agent...',
   cronSkillsHint:'Select tools the agent should use for this schedule. Leave empty if none needed.',
-  scheduleHint:'Daily repeat: Runs at the same time every day. One-time: Runs once at the specified date/time.',
+  scheduleHint:'Weekly: Runs on selected days at the set time. Interval: Repeats every N minutes/hours. One-time: Runs once then auto-deletes.',
   cronNotifyHint:'Enable to receive results via channel. Disable for silent processing.',
   newSkillIntro:'Give your agent new abilities. Write a script to use as a tool, or define text-only instructions.',
   skillNameHint:'Give this skill a name to identify it.',phSkillName:'e.g. YouTube Summarizer',
@@ -1014,8 +1021,12 @@ ko:{
   name:'이름',provider:'프로바이더',model:'모델',systemPrompt:'시스템 프롬프트',
   create:'생성',botToken:'봇 토큰',addPair:'추가 & 페어링',
   platform:'플랫폼',platformUserId:'플랫폼 사용자 ID',nickname:'닉네임',
-  prompt:'프롬프트',schedule:'스케줄',dailyRepeat:'매일 반복',oneTime:'단발성',
+  prompt:'프롬프트',schedule:'스케줄',weeklyRepeat:'요일 반복',intervalRepeat:'간격 반복',oneTime:'단발성',
   time:'시간 (HH:MM)',dateTime:'날짜 & 시간',sendToChannel:'채널로 응답 전송',
+  selectDays:'요일 선택',startTime:'시작 시간',intervalUnit:'반복 간격',
+  minutes:'분',hours:'시간',
+  daySun:'일',dayMon:'월',dayTue:'화',dayWed:'수',dayThu:'목',dayFri:'금',daySat:'토',
+  allDays:'매일',weekdays:'평일',
   noServices:'아직 샐러드가 없습니다. 먼저 아래에서 나만의 맛있는 샐러드를 만드세요.',
   noAgents:'에이전트가 아직 없습니다',noChannels:'채널이 아직 없습니다',
   noTargets:'대상이 아직 없습니다',noCrons:'예약이 아직 없습니다',
@@ -1135,7 +1146,7 @@ ko:{
   cronPromptHint:'예약된 시간에 에이전트가 무엇을 하길 원하는지 적어주세요. 예: "오늘의 주요 뉴스를 요약해줘"',
   phCronName:'매일 뉴스 요약',phCronPrompt:'에이전트에게 보낼 지시...',
   cronSkillsHint:'예약 활동 시 에이전트가 사용할 도구가 있다면 선택하세요. 없으면 비워둬도 됩니다.',
-  scheduleHint:'매일 반복: 매일 같은 시간에 실행됩니다. 단발성: 지정한 날짜·시간에 한 번만 실행됩니다.',
+  scheduleHint:'요일 반복: 선택한 요일의 지정 시간에 실행. 간격 반복: N분/시간마다 반복. 단발성: 한 번 실행 후 자동 삭제.',
   cronNotifyHint:'활동이 끝난 후 결과를 채널로 보고받고 싶다면 켜두세요. 조용히 처리만 하길 원하면 꺼두세요.',
   newSkillIntro:'에이전트에게 새로운 능력을 부여하세요. 스크립트를 작성해 도구로 쓰거나, 텍스트만으로 지침을 내릴 수 있습니다.',
   skillNameHint:'스킬을 구분할 이름을 지어주세요.',phSkillName:'예: 유튜브 요약기',
@@ -1194,8 +1205,12 @@ ja:{
   name:'名前',provider:'プロバイダー',model:'モデル',systemPrompt:'システムプロンプト',
   create:'作成',botToken:'ボットトークン',addPair:'追加＆ペアリング',
   platform:'プラットフォーム',platformUserId:'プラットフォームユーザーID',nickname:'ニックネーム',
-  prompt:'プロンプト',schedule:'スケジュール',dailyRepeat:'毎日繰り返し',oneTime:'一回限り',
+  prompt:'プロンプト',schedule:'スケジュール',weeklyRepeat:'曜日繰り返し',intervalRepeat:'間隔繰り返し',oneTime:'一回限り',
   time:'時間 (HH:MM)',dateTime:'日時',sendToChannel:'チャンネルに応答を送信',
+  selectDays:'曜日選択',startTime:'開始時間',intervalUnit:'繰り返し間隔',
+  minutes:'分',hours:'時間',
+  daySun:'日',dayMon:'月',dayTue:'火',dayWed:'水',dayThu:'木',dayFri:'金',daySat:'土',
+  allDays:'毎日',weekdays:'平日',
   noServices:'まだサラダがありません。スロットにエージェント、チャンネル、ターゲットをドラッグして作りましょう。',
   noAgents:'エージェントがまだありません',noChannels:'チャンネルがまだありません',
   noTargets:'ターゲットがまだありません',noCrons:'スケジュールがまだありません',
@@ -1316,7 +1331,7 @@ ja:{
   cronPromptHint:'予定時間にエージェントに何をさせたいか書いてください。例: 「今日の主要ニュースをまとめて」',
   phCronName:'毎日ニュースまとめ',phCronPrompt:'エージェントへの指示...',
   cronSkillsHint:'スケジュール実行時にエージェントが使うツールがあれば選択してください。なければ空でOKです。',
-  scheduleHint:'毎日繰り返し: 毎日同じ時間に実行。一回限り: 指定した日時に一度だけ実行。',
+  scheduleHint:'曜日繰り返し: 選択した曜日の設定時間に実行。間隔繰り返し: N分/時間ごとに繰り返し。一回限り: 一度実行後自動削除。',
   cronNotifyHint:'結果をチャンネルで報告してほしければオンにしてください。静かに処理だけしたければオフに。',
   newSkillIntro:'エージェントに新しい能力を与えましょう。スクリプトでツールにしたり、テキストだけで指示を出せます。',
   skillNameHint:'このスキルを識別する名前を付けてください。',phSkillName:'例: YouTube要約',
@@ -1375,8 +1390,12 @@ zh:{
   name:'名称',provider:'提供商',model:'模型',systemPrompt:'系统提示词',
   create:'创建',botToken:'机器人令牌',addPair:'添加并配对',
   platform:'平台',platformUserId:'平台用户ID',nickname:'昵称',
-  prompt:'提示词',schedule:'计划',dailyRepeat:'每日重复',oneTime:'一次性',
+  prompt:'提示词',schedule:'计划',weeklyRepeat:'按星期重复',intervalRepeat:'间隔重复',oneTime:'一次性',
   time:'时间 (HH:MM)',dateTime:'日期和时间',sendToChannel:'向频道发送响应',
+  selectDays:'选择星期',startTime:'开始时间',intervalUnit:'重复间隔',
+  minutes:'分钟',hours:'小时',
+  daySun:'日',dayMon:'一',dayTue:'二',dayWed:'三',dayThu:'四',dayFri:'五',daySat:'六',
+  allDays:'每天',weekdays:'工作日',
   noServices:'还没有沙拉。将代理、频道和目标拖到上方插槽来制作吧。',
   noAgents:'暂无代理',noChannels:'暂无频道',noTargets:'暂无目标',noCrons:'暂无定时',
   agentSkillConfig:'代理技能配置',selectAgent:'选择代理:',
@@ -1496,7 +1515,7 @@ zh:{
   cronPromptHint:'告诉代理在预定时间做什么。例: "总结今天的主要新闻"',
   phCronName:'每日新闻摘要',phCronPrompt:'发给代理的指令...',
   cronSkillsHint:'选择定时活动时代理要用的工具。不需要可留空。',
-  scheduleHint:'每日重复: 每天同一时间执行。一次性: 在指定日期时间执行一次。',
+  scheduleHint:'按星期重复: 在选定星期的设定时间执行。间隔重复: 每N分钟/小时重复。一次性: 执行一次后自动删除。',
   cronNotifyHint:'想接收结果报告就开启。只想静默处理就关闭。',
   newSkillIntro:'给你的代理赋予新能力。编写脚本作为工具，或仅用文本给出指令。',
   skillNameHint:'给这个技能起一个名字以便识别。',phSkillName:'例: YouTube摘要',
@@ -2159,16 +2178,38 @@ async function submitAddTarget(){
   closeDetail();load();
 }
 
+function buildDayCheckboxes(prefix){
+  var dayKeys=['daySun','dayMon','dayTue','dayWed','dayThu','dayFri','daySat'];
+  var html='<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">';
+  html+='<button type="button" class="btn btn-g btn-sm" onclick="toggleCronDayPreset(\\''+prefix+'\\',\\'all\\')">'+t('allDays')+'</button>';
+  html+='<button type="button" class="btn btn-g btn-sm" onclick="toggleCronDayPreset(\\''+prefix+'\\',\\'weekdays\\')">'+t('weekdays')+'</button>';
+  html+='</div><div style="display:flex;gap:6px;margin-top:6px">';
+  for(var i=0;i<7;i++){
+    html+='<label style="display:flex;align-items:center;gap:2px;font-size:.75rem;cursor:pointer"><input type="checkbox" class="'+prefix+'-day" value="'+i+'" '+(i>=1&&i<=5?'checked':'')+'>'+t(dayKeys[i])+'</label>';
+  }
+  return html+'</div>';
+}
+function toggleCronDayPreset(prefix,preset){
+  var boxes=document.querySelectorAll('.'+prefix+'-day');
+  boxes.forEach(function(cb){
+    if(preset==='all')cb.checked=true;
+    else if(preset==='weekdays')cb.checked=(cb.value>='1'&&cb.value<='5');
+  });
+}
+function getSelectedDays(prefix){
+  return Array.from(document.querySelectorAll('.'+prefix+'-day:checked')).map(function(cb){return cb.value}).join(',');
+}
 function openAddCronModal(){
-  const panel=$('detailPanel');
+  var panel=$('detailPanel');
   panel.innerHTML=
     '<div class="d-hdr"><h3>'+t('crons')+' '+t('create')+'</h3><button class="d-close" onclick="closeDetail()">\\u2715</button></div>'+
     '<div class="d-field"><label>'+t('name')+'</label><input id="mCrName" placeholder="'+t('phCronName')+'"></div>'+
     '<div class="d-field"><label>'+t('prompt')+'</label><div class="field-hint">'+t('cronPromptHint')+'</div><textarea id="mCrPrompt" rows="3" placeholder="'+t('phCronPrompt')+'"></textarea></div>'+
     '<div class="d-field"><label>'+t('skillsToolSelect')+'</label><div class="field-hint">'+t('cronSkillsHint')+'</div><div id="mCrSkills" style="max-height:120px;overflow-y:auto;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg)"></div></div>'+
-    '<div class="d-field"><label>'+t('schedule')+'</label><div class="field-hint">'+t('scheduleHint')+'</div><select id="mCrType" onchange="toggleMCrTime()"><option value="daily">'+t('dailyRepeat')+'</option><option value="once">'+t('oneTime')+'</option></select></div>'+
-    '<div class="d-field" id="mCrDailyField"><label>'+t('time')+'</label><input id="mCrTime" type="time" value="08:00"></div>'+
-    '<div class="d-field" id="mCrOnceField" style="display:none"><label>'+t('dateTime')+'</label><input id="mCrDatetime" type="datetime-local"></div>'+
+    '<div class="d-field"><label>'+t('schedule')+'</label><div class="field-hint">'+t('scheduleHint')+'</div><select id="mCrType" onchange="toggleMCrTime()"><option value="weekly">'+t('weeklyRepeat')+'</option><option value="interval">'+t('intervalRepeat')+'</option><option value="once">'+t('oneTime')+'</option></select></div>'+
+    '<div id="mCrWeeklyField"><div class="d-field"><label>'+t('selectDays')+'</label>'+buildDayCheckboxes('mcr')+'</div><div class="d-field"><label>'+t('time')+'</label><input id="mCrTime" type="time" value="08:00"></div></div>'+
+    '<div id="mCrIntervalField" style="display:none"><div class="d-field"><label>'+t('intervalUnit')+'</label><div style="display:flex;gap:8px;align-items:center"><input id="mCrIntervalVal" type="number" min="1" value="1" style="width:80px"><select id="mCrIntervalUnit"><option value="hours">'+t('hours')+'</option><option value="minutes">'+t('minutes')+'</option></select></div></div><div class="d-field"><label>'+t('startTime')+'</label><input id="mCrStartTime" type="datetime-local"></div></div>'+
+    '<div id="mCrOnceField" style="display:none"><div class="d-field"><label>'+t('dateTime')+'</label><input id="mCrDatetime" type="datetime-local"></div></div>'+
     '<div class="d-field"><label class="check-label"><input type="checkbox" id="mCrNotify" checked> '+t('sendToChannel')+'</label><div class="field-hint">'+t('cronNotifyHint')+'</div></div>'+
     '<div class="d-actions">'+
       '<button class="btn btn-p" onclick="submitAddCron()">'+t('create')+'</button>'+
@@ -2178,20 +2219,35 @@ function openAddCronModal(){
   $('detailBg').classList.add('show');
 }
 function toggleMCrTime(){
-  const type=$('mCrType').value;
-  $('mCrDailyField').style.display=type==='daily'?'':'none';
+  var type=$('mCrType').value;
+  $('mCrWeeklyField').style.display=type==='weekly'?'':'none';
+  $('mCrIntervalField').style.display=type==='interval'?'':'none';
   $('mCrOnceField').style.display=type==='once'?'':'none';
 }
 async function submitAddCron(){
-  const name=$('mCrName').value.trim();
-  const prompt=$('mCrPrompt').value.trim();
+  var name=$('mCrName').value.trim();
+  var prompt=$('mCrPrompt').value.trim();
   if(!name||!prompt){showAlert(t('nameAndPromptRequired'));return}
-  const scheduleType=$('mCrType').value;
-  let scheduleTime;
-  if(scheduleType==='daily'){scheduleTime=$('mCrTime').value||'08:00'}
-  else{scheduleTime=$('mCrDatetime').value;if(!scheduleTime){showAlert(t('dateTimeRequired'));return}}
-  const skillHint=JSON.stringify(Array.from(document.querySelectorAll('#mCrSkills input:checked')).map(el=>el.value));
-  await api('/api/crons','POST',{name,prompt,skillHint,scheduleType,scheduleTime,notify:$('mCrNotify').checked});
+  var scheduleType=$('mCrType').value;
+  var scheduleTime,intervalMinutes=null,scheduleDays=null;
+  if(scheduleType==='weekly'){
+    scheduleDays=getSelectedDays('mcr');
+    if(!scheduleDays){showAlert(t('selectDays'));return}
+    scheduleTime=$('mCrTime').value||'08:00';
+  }else if(scheduleType==='interval'){
+    var val=parseInt($('mCrIntervalVal').value,10);
+    var unit=$('mCrIntervalUnit').value;
+    if(!val||val<1){showAlert('Invalid interval');return}
+    intervalMinutes=unit==='hours'?val*60:val;
+    if(intervalMinutes<5){showAlert('Minimum 5 minutes');return}
+    scheduleTime=$('mCrStartTime').value;
+    if(!scheduleTime){scheduleTime=new Date().toISOString()}
+  }else{
+    scheduleTime=$('mCrDatetime').value;
+    if(!scheduleTime){showAlert(t('dateTimeRequired'));return}
+  }
+  var skillHint=JSON.stringify(Array.from(document.querySelectorAll('#mCrSkills input:checked')).map(function(el){return el.value}));
+  await api('/api/crons','POST',{name:name,prompt:prompt,skillHint:skillHint,scheduleType:scheduleType,scheduleTime:scheduleTime,intervalMinutes:intervalMinutes,scheduleDays:scheduleDays,notify:$('mCrNotify').checked});
   closeDetail();load();
 }
 
@@ -2401,7 +2457,7 @@ function renderServices(){
     });
     const cronCards=allLinkedCrons.map(sc=>{
       const cj=(D.cronJobs||[]).find(c=>c.id===sc.cron_id);
-      const schedLabel=cj?(cj.schedule_type==='daily'?'\\u23F0 '+cj.schedule_time:'\\u2B50 '+cj.schedule_time.slice(0,16).replace('T',' ')):'';
+      const schedLabel=cronScheduleBadge(cj);
       const firstSvcId=svcs[0].id;
       return '<div class="cron-card" onclick="openCronDetail(\\''+sc.cron_id+'\\')">'+
         '<span class="cc-name">'+esc(cj?.name||'?')+'</span>'+
@@ -2419,7 +2475,7 @@ function renderServices(){
       const templateCronEntries=(D.serviceCrons||[]).filter(sc=>sc.service_id===templateSvc.id);
       const templateCronCards=templateCronEntries.map(sc=>{
         const cj=(D.cronJobs||[]).find(c=>c.id===sc.cron_id);
-        const schedLabel=cj?(cj.schedule_type==='daily'?'\\u23F0 '+cj.schedule_time:'\\u2B50 '+cj.schedule_time.slice(0,16).replace('T',' ')):'';
+        const schedLabel=cronScheduleBadge(cj);
         return '<div class="cron-card" onclick="openCronDetail(\\''+sc.cron_id+'\\')">'+
           '<span class="cc-name">'+esc(cj?.name||'?')+'</span>'+
           '<span class="cc-schedule">'+schedLabel+'</span>'+
@@ -2519,6 +2575,21 @@ function getChannelWarning(ch){
   return '';
 }
 
+var _dayLabels=['daySun','dayMon','dayTue','dayWed','dayThu','dayFri','daySat'];
+function cronScheduleBadge(cr){
+  if(!cr)return '';
+  if(cr.schedule_type==='weekly'){
+    var days=(cr.schedule_days||'').split(',').filter(Boolean).map(Number);
+    var dayStr=days.length===7?t('allDays'):days.map(function(d){return t(_dayLabels[d])}).join(',');
+    return '\\uD83D\\uDCC5 '+dayStr+' '+cr.schedule_time;
+  }
+  if(cr.schedule_type==='interval'&&cr.interval_minutes){
+    var m=cr.interval_minutes;
+    var label=m>=60&&m%60===0?(m/60)+t('hours'):m+t('minutes');
+    return '\\uD83D\\uDD04 '+label;
+  }
+  return '\\u2B50 '+cr.schedule_time.slice(0,16).replace('T',' ');
+}
 function renderBlocks(){
   const agentSvcCount={};
   const channelSvcCount={};
@@ -2607,7 +2678,7 @@ function renderBlocks(){
   // Crons
   $('crBlocks').innerHTML=(D.cronJobs||[]).filter(function(cr){return isCronVisible(cr.id)}).map(cr=>{
     const linkedCount=getVisibleCronLinkedCount(cr.id);
-    const sBadge=cr.schedule_type==='daily'?('\\u23F0 '+cr.schedule_time):('\\u2B50 '+cr.schedule_time.slice(0,16).replace('T',' '));
+    const sBadge=cronScheduleBadge(cr);
     const avatar = cr.thumbnail || (cr.name||'C').charAt(0).toUpperCase();
     return '<div class="blk cr" draggable="true" ondragstart="dragMoved=false;onDragStart(event,\\'cron\\',\\''+cr.id+'\\',\\''+esc(cr.name).replace(/'/g,"\\\\&#39;")+'\\');return true" ondragend="onDragEnd(event)" onmousemove="if(event.buttons)dragMoved=true"'+
       ' onclick="if(!dragMoved){event.stopPropagation();openCronDetail(\\''+cr.id+'\\')}" style="cursor:pointer">'+
@@ -2703,13 +2774,13 @@ async function attachCronToServices(svcIds){
   });
   if(templateSvcId){
     const already=(D.serviceCrons||[]).find(sc=>sc.service_id===templateSvcId&&sc.cron_id===cronId);
-    if(!already) await api('/api/services/'+templateSvcId+'/crons','POST',{cronId,scheduleType:cj.schedule_type,scheduleTime:cj.schedule_time});
+    if(!already) await api('/api/services/'+templateSvcId+'/crons','POST',{cronId,scheduleType:cj.schedule_type,scheduleTime:cj.schedule_time,intervalMinutes:cj.interval_minutes,scheduleDays:cj.schedule_days});
     load();
     return;
   }
   for(const sid of svcIds){
     const already=(D.serviceCrons||[]).find(sc=>sc.service_id===sid&&sc.cron_id===cronId);
-    if(!already) await api('/api/services/'+sid+'/crons','POST',{cronId,scheduleType:cj.schedule_type,scheduleTime:cj.schedule_time});
+    if(!already) await api('/api/services/'+sid+'/crons','POST',{cronId,scheduleType:cj.schedule_type,scheduleTime:cj.schedule_time,intervalMinutes:cj.interval_minutes,scheduleDays:cj.schedule_days});
   }
   load();
 }
@@ -2743,13 +2814,18 @@ async function detachCronFromSvc(svcId,cronId){
 }
 
 function openCronDetail(id){
-  const cr=(D.cronJobs||[]).find(c=>c.id===id);
+  var cr=(D.cronJobs||[]).find(function(c){return c.id===id});
   if(!cr)return;
-  const panel=$('detailPanel');
-  const isDaily=cr.schedule_type==='daily';
-  const notifyChecked=cr.notify?' checked':'';
-  let selectedSkills=[];
+  var panel=$('detailPanel');
+  var st=cr.schedule_type;
+  var notifyChecked=cr.notify?' checked':'';
+  var selectedSkills=[];
   try{selectedSkills=JSON.parse(cr.skill_hint||'[]')}catch{}
+  var existingDays=(cr.schedule_days||'').split(',').filter(Boolean);
+  var intMin=cr.interval_minutes||60;
+  var intUnit=intMin>=60&&intMin%60===0?'hours':'minutes';
+  var intVal=intUnit==='hours'?intMin/60:intMin;
+
   panel.innerHTML=
     '<div class="d-hdr"><h3>'+esc(cr.name)+'</h3><button class="d-close" onclick="closeDetail()">\\u2715</button></div>'+
     '<span class="d-tag cr">'+t('crons')+'</span>'+
@@ -2757,24 +2833,29 @@ function openCronDetail(id){
     '<div class="d-field"><label>'+t('prompt')+'</label><div class="field-hint">'+t('cronPromptHint')+'</div><textarea id="dCrPrompt" rows="4">'+esc(cr.prompt)+'</textarea></div>'+
     '<div class="d-field"><label>'+t('skillsToolSelect')+'</label><div class="field-hint">'+t('cronSkillsHint')+'</div><div id="dCrSkills" style="max-height:160px;overflow-y:auto;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg)"></div></div>'+
     '<div class="d-field"><label>'+t('schedule')+'</label><div class="field-hint">'+t('scheduleHint')+'</div>'+
-    '<select id="dCrType" onchange="toggleDCrTime()"><option value="daily"'+(isDaily?' selected':'')+'>'+t('dailyRepeat')+'</option><option value="once"'+(!isDaily?' selected':'')+'>'+t('oneTime')+'</option></select></div>'+
-    '<div class="d-field" id="dCrDailyField"'+(isDaily?'':' style="display:none"')+'><label>'+t('time')+'</label><input id="dCrTime" type="time" value="'+(isDaily?esc(cr.schedule_time):'08:00')+'"></div>'+
-    '<div class="d-field" id="dCrOnceField"'+(!isDaily?'':' style="display:none"')+'><label>'+t('dateTime')+'</label><input id="dCrDatetime" type="datetime-local" value="'+(!isDaily?esc(cr.schedule_time.slice(0,16)):'')+'"></div>'+
+    '<select id="dCrType" onchange="toggleDCrTime()"><option value="weekly"'+(st==='weekly'?' selected':'')+'>'+t('weeklyRepeat')+'</option><option value="interval"'+(st==='interval'?' selected':'')+'>'+t('intervalRepeat')+'</option><option value="once"'+(st==='once'?' selected':'')+'>'+t('oneTime')+'</option></select></div>'+
+    '<div id="dCrWeeklyField"'+(st==='weekly'?'':' style="display:none"')+'><div class="d-field"><label>'+t('selectDays')+'</label>'+buildDayCheckboxes('dcr')+'</div><div class="d-field"><label>'+t('time')+'</label><input id="dCrTime" type="time" value="'+(st==='weekly'?esc(cr.schedule_time):'08:00')+'"></div></div>'+
+    '<div id="dCrIntervalField"'+(st==='interval'?'':' style="display:none"')+'><div class="d-field"><label>'+t('intervalUnit')+'</label><div style="display:flex;gap:8px;align-items:center"><input id="dCrIntervalVal" type="number" min="1" value="'+intVal+'" style="width:80px"><select id="dCrIntervalUnit"><option value="hours"'+(intUnit==='hours'?' selected':'')+'>'+t('hours')+'</option><option value="minutes"'+(intUnit==='minutes'?' selected':'')+'>'+t('minutes')+'</option></select></div></div><div class="d-field"><label>'+t('startTime')+'</label><input id="dCrStartTime" type="datetime-local" value="'+(st==='interval'?esc(cr.schedule_time.slice(0,16)):'')+'"></div></div>'+
+    '<div id="dCrOnceField"'+(st==='once'?'':' style="display:none"')+'><div class="d-field"><label>'+t('dateTime')+'</label><input id="dCrDatetime" type="datetime-local" value="'+(st==='once'?esc(cr.schedule_time.slice(0,16)):'')+'"></div></div>'+
     '<div class="d-field"><label class="check-label"><input type="checkbox" id="dCrNotify"'+notifyChecked+'> '+t('sendToChannel')+'</label><div class="field-hint">'+t('cronNotifyHint')+'</div></div>'+
     '<div class="d-actions">'+
     '<button class="btn btn-p" onclick="saveCronDetail(\\''+cr.id+'\\')">'+t('save')+'</button>'+
     '<button class="btn btn-g" onclick="closeDetail()">'+t('cancel')+'</button>'+
     '<button class="btn btn-d" onclick="delCron(\\''+cr.id+'\\');closeDetail()">'+t('delete')+'</button>'+
-    '</div>'+
-    '';
+    '</div>';
   renderCronSkillChecks('dCrSkills',selectedSkills);
+  // weekly 기존 요일 체크 복원
+  if(st==='weekly'&&existingDays.length>0){
+    document.querySelectorAll('.dcr-day').forEach(function(cb){cb.checked=existingDays.includes(cb.value)});
+  }
   $('detailBg').classList.add('show');
 }
 
 function toggleDCrTime(){
-  const t=$('dCrType').value;
-  $('dCrDailyField').style.display=t==='daily'?'':'none';
-  $('dCrOnceField').style.display=t==='once'?'':'none';
+  var v=$('dCrType').value;
+  $('dCrWeeklyField').style.display=v==='weekly'?'':'none';
+  $('dCrIntervalField').style.display=v==='interval'?'':'none';
+  $('dCrOnceField').style.display=v==='once'?'':'none';
 }
 
 let _cachedAllSkills=null;
@@ -2803,15 +2884,29 @@ async function renderCronSkillChecks(containerId,selected){
 
 
 async function saveCronDetail(id){
-  const name=$('dCrName').value.trim();
-  const prompt=$('dCrPrompt').value.trim();
-  const type=$('dCrType').value;
-  let time;
-  if(type==='daily'){time=$('dCrTime').value||'08:00';}
-  else{time=$('dCrDatetime').value;if(!time){showAlert(t('dateTimeRequired'));return}}
-  const notify=$('dCrNotify').checked?1:0;
-  const skill_hint=JSON.stringify(Array.from(document.querySelectorAll('#dCrSkills input:checked')).map(el=>el.value));
-  await api('/api/crons/'+id,'PUT',{name,prompt,skill_hint,schedule_type:type,schedule_time:time,notify});
+  var name=$('dCrName').value.trim();
+  var prompt=$('dCrPrompt').value.trim();
+  var type=$('dCrType').value;
+  var time,intervalMinutes=null,scheduleDays=null;
+  if(type==='weekly'){
+    scheduleDays=getSelectedDays('dcr');
+    if(!scheduleDays){showAlert(t('selectDays'));return}
+    time=$('dCrTime').value||'08:00';
+  }else if(type==='interval'){
+    var val=parseInt($('dCrIntervalVal').value,10);
+    var unit=$('dCrIntervalUnit').value;
+    if(!val||val<1){showAlert('Invalid interval');return}
+    intervalMinutes=unit==='hours'?val*60:val;
+    if(intervalMinutes<5){showAlert('Minimum 5 minutes');return}
+    time=$('dCrStartTime').value;
+    if(!time){time=new Date().toISOString()}
+  }else{
+    time=$('dCrDatetime').value;
+    if(!time){showAlert(t('dateTimeRequired'));return}
+  }
+  var notify=$('dCrNotify').checked?1:0;
+  var skill_hint=JSON.stringify(Array.from(document.querySelectorAll('#dCrSkills input:checked')).map(function(el){return el.value}));
+  await api('/api/crons/'+id,'PUT',{name:name,prompt:prompt,skill_hint:skill_hint,schedule_type:type,schedule_time:time,interval_minutes:intervalMinutes,schedule_days:scheduleDays,notify:notify});
   closeDetail();load();
 }
 
@@ -3868,16 +3963,27 @@ export function startWebUiServer(
         const body = await readJsonBody(req);
         const name = typeof body.name === 'string' ? body.name.trim() : '';
         if (!name) throw new Error('name required');
-        const scheduleType =
-          body.scheduleType === 'once' ? ('once' as const) : ('daily' as const);
+        const rawType = String(body.scheduleType ?? '');
+        const scheduleType: 'once' | 'weekly' | 'interval' =
+          rawType === 'once' || rawType === 'interval'
+            ? rawType
+            : 'weekly';
         const scheduleTime =
           typeof body.scheduleTime === 'string' ? body.scheduleTime : '08:00';
+        const intervalMinutes =
+          typeof body.intervalMinutes === 'number'
+            ? body.intervalMinutes
+            : null;
+        const scheduleDays =
+          typeof body.scheduleDays === 'string' ? body.scheduleDays : null;
         const id = context.createCronJob({
           name,
           prompt: typeof body.prompt === 'string' ? body.prompt : '',
           skillHint: typeof body.skillHint === 'string' ? body.skillHint : '[]',
           scheduleType,
           scheduleTime,
+          intervalMinutes,
+          scheduleDays,
           notify: body.notify !== false,
         });
         sendJson(res, 200, { ok: true, id });
@@ -3886,18 +3992,28 @@ export function startWebUiServer(
       if (url.pathname.match(/^\/api\/crons\/[^/]+$/) && req.method === 'PUT') {
         const id = decodeURIComponent(url.pathname.replace('/api/crons/', ''));
         const body = await readJsonBody(req);
+        const rawST = String(body.schedule_type ?? '');
+        const parsedST: 'once' | 'weekly' | 'interval' | undefined =
+          rawST === 'once' || rawST === 'weekly' || rawST === 'interval'
+            ? rawST
+            : undefined;
         context.updateCronJob(id, {
           name: typeof body.name === 'string' ? body.name : undefined,
           prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
           skill_hint:
             typeof body.skill_hint === 'string' ? body.skill_hint : undefined,
-          schedule_type:
-            body.schedule_type === 'daily' || body.schedule_type === 'once'
-              ? body.schedule_type
-              : undefined,
+          schedule_type: parsedST,
           schedule_time:
             typeof body.schedule_time === 'string'
               ? body.schedule_time
+              : undefined,
+          interval_minutes:
+            typeof body.interval_minutes === 'number'
+              ? body.interval_minutes
+              : undefined,
+          schedule_days:
+            typeof body.schedule_days === 'string'
+              ? body.schedule_days
               : undefined,
           notify: typeof body.notify === 'number' ? body.notify : undefined,
         });
@@ -3923,15 +4039,23 @@ export function startWebUiServer(
         const body = await readJsonBody(req);
         const cronId = typeof body.cronId === 'string' ? body.cronId : '';
         const scheduleType =
-          typeof body.scheduleType === 'string' ? body.scheduleType : 'daily';
+          typeof body.scheduleType === 'string' ? body.scheduleType : 'weekly';
         const scheduleTime =
           typeof body.scheduleTime === 'string' ? body.scheduleTime : '08:00';
+        const intervalMinutes =
+          typeof body.intervalMinutes === 'number'
+            ? body.intervalMinutes
+            : null;
+        const scheduleDays =
+          typeof body.scheduleDays === 'string' ? body.scheduleDays : null;
         if (!cronId) throw new Error('cronId required');
         context.attachCronToService(
           serviceId,
           cronId,
           scheduleType,
           scheduleTime,
+          intervalMinutes,
+          scheduleDays,
         );
         sendJson(res, 200, { ok: true });
         return;

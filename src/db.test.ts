@@ -309,8 +309,9 @@ describe('cron jobs', () => {
       id: 'cron-1',
       name: 'Morning Report',
       prompt: 'Report please',
-      scheduleType: 'daily',
+      scheduleType: 'weekly',
       scheduleTime: '09:00',
+      scheduleDays: '0,1,2,3,4,5,6',
     });
     const jobs = listCronJobs();
     expect(jobs.find((j) => j.id === 'cron-1')).toBeDefined();
@@ -360,8 +361,9 @@ describe('cron jobs', () => {
       id: 'cron-del',
       name: 'Delete Me',
       prompt: 'test',
-      scheduleType: 'daily',
+      scheduleType: 'weekly',
       scheduleTime: '10:00',
+      scheduleDays: '1,3,5',
     });
     attachCronToService('svc-cron', 'cron-del', '2024-01-01T10:00:00.000Z');
 
@@ -416,8 +418,9 @@ describe('cron jobs', () => {
       id: 'cron-att',
       name: 'Attach Me',
       prompt: 'test',
-      scheduleType: 'daily',
+      scheduleType: 'weekly',
       scheduleTime: '08:00',
+      scheduleDays: '0,1,2,3,4,5,6',
     });
     attachCronToService('svc-att', 'cron-att', '2024-01-01T08:00:00.000Z');
 

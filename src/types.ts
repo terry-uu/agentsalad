@@ -6,9 +6,10 @@
  * TargetType: 'user'(DM), 'room'(채널/스레드), 'everyone'(기본 자동 생성 템플릿) 구분.
  * MessageContext: 채널 어댑터가 전달하는 메시지 수신 컨텍스트 (DM/멘션/방 정보).
  * CustomSkill: script(실행) + prompt(사용법) 묶음.
- * CronJob/ServiceCron: 서비스 단위 예약 작업 (daily/once 스케줄).
- * 최근 수정: TargetProfile.folder_name으로 타겟 워크스페이스 경로를 안정화.
- * 최근 수정: Service에 creation_source를 추가해 퍼블릭 생성분 필터링을 지원한다.
+ * CronJob/ServiceCron: 서비스 단위 예약 작업.
+ *   schedule_type: once(일회) / weekly(요일반복, 구 daily 통합) / interval(시간간격 반복).
+ *   weekly는 schedule_days("0,1,2,3,4,5,6")로 요일 지정, 전체 선택 시 매일 반복과 동일.
+ *   interval은 interval_minutes(분 단위)로 간격 지정, schedule_time에 시작 시각 저장.
  */
 
 // --- Channel Type (supported messenger platforms) ---
@@ -189,8 +190,14 @@ export interface CronJob {
   prompt: string;
   /** 에이전트에게 사용하라고 지시할 도구/스킬 이름 목록 (JSON 배열) */
   skill_hint: string;
-  schedule_type: 'daily' | 'once';
-  schedule_time: string; // daily: HH:MM, once: ISO datetime
+  /** once: 일회성, weekly: 요일별 반복 (구 daily 흡수), interval: 시간 간격 반복 */
+  schedule_type: 'once' | 'weekly' | 'interval';
+  /** weekly: HH:MM, once: ISO datetime, interval: ISO datetime (시작 시각) */
+  schedule_time: string;
+  /** interval 전용: 반복 간격 (분 단위, 최소 5) */
+  interval_minutes: number | null;
+  /** weekly 전용: 요일 번호 CSV (0=일,1=월,...,6=토). 예: "1,3,5" = 월,수,금 */
+  schedule_days: string | null;
   notify: number; // 1 = 채널 전송, 0 = 대화 저장만
   thumbnail: string | null;
   created_at: string;

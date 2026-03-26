@@ -42,6 +42,8 @@ import {
   setAgentCustomSkill,
   updateAgentProfile,
   updateCronJob,
+  updateNextRunByCronId,
+  getCronJobById,
   updateCustomSkill,
   updateManagedChannel,
   updateServiceStatus,
@@ -82,8 +84,10 @@ import { startWebUiServer } from './web-ui.js';
 import {
   startCronScheduler,
   stopCronScheduler,
-  computeDailyNextRun,
+  computeWeeklyNextRun,
+  computeIntervalNextRun,
   computeOnceNextRun,
+  parseScheduleDays,
 } from './cron-scheduler.js';
 import { logger } from './logger.js';
 import type { AgentProfile } from './types.js';
@@ -684,8 +688,10 @@ async function main(): Promise<void> {
         name: string;
         prompt: string;
         skillHint?: string;
-        scheduleType: 'daily' | 'once';
+        scheduleType: 'once' | 'weekly' | 'interval';
         scheduleTime: string;
+        intervalMinutes?: number | null;
+        scheduleDays?: string | null;
         notify?: boolean;
       }) => {
         const id = `cron-${Date.now().toString(36)}`;
@@ -696,6 +702,8 @@ async function main(): Promise<void> {
           skillHint: input.skillHint,
           scheduleType: input.scheduleType,
           scheduleTime: input.scheduleTime,
+          intervalMinutes: input.intervalMinutes,
+          scheduleDays: input.scheduleDays,
           notify: input.notify,
           thumbnail: pickRandom(THUMBS_CRON),
         });
@@ -703,6 +711,32 @@ async function main(): Promise<void> {
       },
       updateCronJob: (id: string, updates: Record<string, unknown>) => {
         updateCronJob(id, updates as Parameters<typeof updateCronJob>[1]);
+
+        // 스케줄 관련 필드 변경 시 연결된 service_crons의 next_run 일괄 재계산
+        const scheduleChanged =
+          updates.schedule_type !== undefined ||
+          updates.schedule_time !== undefined ||
+          updates.interval_minutes !== undefined ||
+          updates.schedule_days !== undefined;
+        if (scheduleChanged) {
+          const cron = getCronJobById(id);
+          if (cron) {
+            let nextRun: string | null = null;
+            if (cron.schedule_type === 'weekly') {
+              const days = parseScheduleDays(cron.schedule_days);
+              nextRun = computeWeeklyNextRun(cron.schedule_time, days);
+            } else if (cron.schedule_type === 'interval' && cron.interval_minutes) {
+              const startTime = new Date(cron.schedule_time);
+              nextRun =
+                startTime.getTime() > Date.now()
+                  ? startTime.toISOString()
+                  : computeIntervalNextRun(cron.interval_minutes);
+            } else if (cron.schedule_type === 'once') {
+              nextRun = computeOnceNextRun(cron.schedule_time);
+            }
+            updateNextRunByCronId(id, nextRun);
+          }
+        }
       },
       deleteCronJob: (id: string) => {
         deleteCronJob(id);
@@ -712,11 +746,22 @@ async function main(): Promise<void> {
         cronId: string,
         scheduleType: string,
         scheduleTime: string,
+        intervalMinutes?: number | null,
+        scheduleDays?: string | null,
       ) => {
-        const nextRun =
-          scheduleType === 'daily'
-            ? computeDailyNextRun(scheduleTime)
-            : computeOnceNextRun(scheduleTime);
+        let nextRun: string | null = null;
+        if (scheduleType === 'weekly') {
+          const days = parseScheduleDays(scheduleDays ?? null);
+          nextRun = computeWeeklyNextRun(scheduleTime, days);
+        } else if (scheduleType === 'interval' && intervalMinutes) {
+          const startTime = new Date(scheduleTime);
+          nextRun =
+            startTime.getTime() > Date.now()
+              ? startTime.toISOString()
+              : computeIntervalNextRun(intervalMinutes);
+        } else {
+          nextRun = computeOnceNextRun(scheduleTime);
+        }
         attachCronToService(serviceId, cronId, nextRun);
       },
       detachCronFromService: (serviceId: string, cronId: string) => {

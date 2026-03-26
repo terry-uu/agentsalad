@@ -1,28 +1,73 @@
 import { describe, it, expect } from 'vitest';
 
 import {
-  computeDailyNextRun,
+  computeWeeklyNextRun,
+  computeIntervalNextRun,
   computeOnceNextRun,
+  parseScheduleDays,
   mapConcurrent,
 } from './cron-scheduler.js';
 
-describe('computeDailyNextRun', () => {
-  it('returns tomorrow if time already passed today', () => {
-    const now = new Date();
-    const pastH = String(now.getHours() - 1).padStart(2, '0');
-    if (now.getHours() === 0) return; // edge: midnight → skip
-    const result = new Date(computeDailyNextRun(`${pastH}:00`));
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    expect(result.getDate()).toBe(tomorrow.getDate());
-  });
-
-  it('returns today if time has not passed yet', () => {
+describe('computeWeeklyNextRun', () => {
+  it('returns today if matching day and time not passed yet', () => {
     const now = new Date();
     const futureH = String(now.getHours() + 1).padStart(2, '0');
-    if (now.getHours() >= 23) return; // edge: 23시 → skip
-    const result = new Date(computeDailyNextRun(`${futureH}:00`));
-    expect(result.getDate()).toBe(now.getDate());
+    if (now.getHours() >= 23) return;
+    const days = [now.getDay()];
+    const result = computeWeeklyNextRun(`${futureH}:00`, days);
+    expect(result).not.toBeNull();
+    expect(new Date(result!).getDate()).toBe(now.getDate());
+  });
+
+  it('returns next matching day if time passed today', () => {
+    const now = new Date();
+    const pastH = String(now.getHours() - 1).padStart(2, '0');
+    if (now.getHours() === 0) return;
+    const today = now.getDay();
+    const tomorrow = (today + 1) % 7;
+    const result = computeWeeklyNextRun(`${pastH}:00`, [tomorrow]);
+    expect(result).not.toBeNull();
+    const resultDate = new Date(result!);
+    expect(resultDate.getDay()).toBe(tomorrow);
+  });
+
+  it('returns null for empty days array', () => {
+    expect(computeWeeklyNextRun('08:00', [])).toBeNull();
+  });
+
+  it('handles all days (daily equivalent)', () => {
+    const now = new Date();
+    const futureH = String(now.getHours() + 1).padStart(2, '0');
+    if (now.getHours() >= 23) return;
+    const allDays = [0, 1, 2, 3, 4, 5, 6];
+    const result = computeWeeklyNextRun(`${futureH}:00`, allDays);
+    expect(result).not.toBeNull();
+    expect(new Date(result!).getDate()).toBe(now.getDate());
+  });
+});
+
+describe('computeIntervalNextRun', () => {
+  it('returns future time offset by interval minutes', () => {
+    const before = Date.now();
+    const result = new Date(computeIntervalNextRun(30)).getTime();
+    const expected = before + 30 * 60_000;
+    expect(result).toBeGreaterThanOrEqual(expected - 100);
+    expect(result).toBeLessThanOrEqual(expected + 100);
+  });
+});
+
+describe('parseScheduleDays', () => {
+  it('parses comma-separated day numbers', () => {
+    expect(parseScheduleDays('1,3,5')).toEqual([1, 3, 5]);
+  });
+
+  it('returns empty for null/undefined', () => {
+    expect(parseScheduleDays(null)).toEqual([]);
+    expect(parseScheduleDays(undefined)).toEqual([]);
+  });
+
+  it('filters invalid values', () => {
+    expect(parseScheduleDays('0,7,-1,3,abc')).toEqual([0, 3]);
   });
 });
 
@@ -87,7 +132,6 @@ describe('mapConcurrent', () => {
     );
     const parTime = Date.now() - parStart;
 
-    // 병렬(3)은 순차 대비 최소 1.5배 이상 빨라야 함
     expect(parTime).toBeLessThan(seqTime * 0.75);
   });
 
@@ -142,10 +186,8 @@ describe('mapConcurrent', () => {
 
     expect(results).toEqual(['svc-A', 'svc-B', 'svc-C', 'svc-D', 'svc-E']);
 
-    // 3개 worker로 병렬: 순차(290ms) 대비 절반 이하여야 함
     expect(elapsed).toBeLessThan(200);
 
-    // 처음 3개가 동시에 시작했는지 확인
     expect(log[0]).toBe('start:svc-A');
     expect(log[1]).toBe('start:svc-B');
     expect(log[2]).toBe('start:svc-C');

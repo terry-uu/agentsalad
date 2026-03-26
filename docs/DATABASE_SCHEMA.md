@@ -221,12 +221,16 @@ Scheduled task definitions. Create cron blocks and attach them to active service
 | `name` | TEXT | Display name |
 | `prompt` | TEXT | Prompt to send to the agent |
 | `skill_hint` | TEXT | Tool names JSON array (e.g. `["fetch_url","gmail_send"]`), default `[]` |
-| `schedule_type` | TEXT | `daily` / `once` |
-| `schedule_time` | TEXT | daily: `HH:MM`, once: ISO datetime |
+| `schedule_type` | TEXT | `weekly` / `interval` / `once` |
+| `schedule_time` | TEXT | weekly: `HH:MM`, interval: ISO datetime (start time), once: ISO datetime |
+| `interval_minutes` | INTEGER NULL | interval only: repeat interval in minutes (min 5) |
+| `schedule_days` | TEXT NULL | weekly only: comma-separated day numbers (0=Sun..6=Sat). e.g. `"1,3,5"` = Mon/Wed/Fri, `"0,1,2,3,4,5,6"` = every day |
 | `notify` | INTEGER | 1 = send to channel, 0 = save conversation only |
 | `thumbnail` | TEXT | Food emoji thumbnail (randomly assigned) |
 | `created_at` | TEXT | |
 | `updated_at` | TEXT | |
+
+- Legacy `daily` type is auto-migrated to `weekly` with `schedule_days='0,1,2,3,4,5,6'` on startup
 
 ### `service_crons`
 Service ↔ Cron junction table. One cron can be reused across multiple services.
@@ -241,7 +245,8 @@ Service ↔ Cron junction table. One cron can be reused across multiple services
 | PK | | `(service_id, cron_id)` |
 
 - Index: `(next_run)` — scheduler polling optimization
-- Daily crons: after execution, `next_run` is set to next day same time
+- Weekly crons: after execution, `next_run` is set to next matching day+time
+- Interval crons: after execution, `next_run` = now + `interval_minutes`
 - Once crons: after execution, removed from `service_crons`; when all links are gone, `cron_jobs` row is auto-deleted
 - Service deletion cascades to linked `service_crons`
 
@@ -260,7 +265,8 @@ Service ↔ Cron junction table. One cron can be reused across multiple services
 - Custom skill scripts at `store/skills/<folder_name>/` — 4 files auto-generated (run.sh, schema.json, prompt.txt, GUIDE.md), auto-renamed on skill rename
 - Prompt priority: `prompt.txt` file > DB `custom_skills.prompt` field
 - Schema priority: `schema.json` file > DB `custom_skills.input_schema` field
-- Cron scheduler: 30s polling, `service_crons.next_run <= now` for due tasks
+- Cron scheduler: 10s polling, `service_crons.next_run <= now` for due tasks
+- Cron schedule types: `weekly` (day-of-week repeat), `interval` (fixed N-minute repeat), `once` (single fire)
 - Smart Step: `_plan-{serviceId}.json` in agent workspace root, server startup cleans up stale files, 3s cooldown between batches for user interrupt detection
 
 ## Auto-Compaction

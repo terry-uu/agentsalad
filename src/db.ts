@@ -5,14 +5,11 @@
  * Agent + Channel + Target = Service 모델. Target은 user(DM), room(채널/스레드),
  * everyone(기본 자동 생성 템플릿)로 구분된다.
  * 멀티채널: Telegram/Discord/Slack. managed_channels.type 기반으로 채널을 구분한다.
- * targets.target_type: 'user'(DM 대상) / 'room'(채널/스레드 대상) /
- * 'everyone'(기본 자동 생성 템플릿) 구분.
- * findActiveServiceByRoom(): room 타겟 매칭 (서버 채널 내 메시지 → 방 타겟 서비스).
- * 서비스 크론: cron_jobs + service_crons 테이블로 예약 작업 지원.
+ * 서비스 크론: cron_jobs + service_crons. schedule_type: once/weekly/interval.
+ *   weekly(구 daily 통합): schedule_days + HH:MM. interval: interval_minutes + 시작시각.
+ *   기존 daily 크론은 시작 시 weekly(전체요일)로 자동 마이그레이션.
  * 커스텀 스킬: custom_skills + agent_custom_skills로 스크립트 기반 스킬 관리.
  * 스마트 스텝: agent_profiles.smart_step/max_plan_steps + hasNewUserMessages() 인터럽트 감지.
- * createAgentProfile()이 time_aware, smart_step, max_plan_steps를 생성 시점에
- * 함께 INSERT하도록 수정. 기존에는 생성 시 누락되어 기본값 0으로만 저장됨.
  */
 import Database from 'better-sqlite3';
 import fs from 'fs';
@@ -276,6 +273,15 @@ function createSchema(database: Database.Database): void {
   // targets provenance: 수동 생성 vs everyone 템플릿 자동 생성
   safeAlter(
     `ALTER TABLE targets ADD COLUMN creation_source TEXT NOT NULL DEFAULT 'manual'`,
+  );
+
+  // 반복예약 크론: interval_minutes(간격 반복), schedule_days(요일 반복)
+  safeAlter(`ALTER TABLE cron_jobs ADD COLUMN interval_minutes INTEGER`);
+  safeAlter(`ALTER TABLE cron_jobs ADD COLUMN schedule_days TEXT`);
+
+  // daily → weekly 마이그레이션: 기존 daily 크론을 weekly(전체 요일)로 변환
+  database.exec(
+    `UPDATE cron_jobs SET schedule_type = 'weekly', schedule_days = '0,1,2,3,4,5,6' WHERE schedule_type = 'daily'`,
   );
 
   // 기존 레코드에 thumbnail 랜덤 배정
@@ -1596,7 +1602,7 @@ export function removeAgentCustomSkill(
 // ============================================================
 
 const CJ_COLUMNS =
-  'id, name, prompt, skill_hint, schedule_type, schedule_time, notify, thumbnail, created_at, updated_at';
+  'id, name, prompt, skill_hint, schedule_type, schedule_time, interval_minutes, schedule_days, notify, thumbnail, created_at, updated_at';
 
 export function listCronJobs(): CronJob[] {
   return db
@@ -1628,8 +1634,10 @@ export function createCronJob(input: {
   name: string;
   prompt: string;
   skillHint?: string;
-  scheduleType: 'daily' | 'once';
+  scheduleType: 'once' | 'weekly' | 'interval';
   scheduleTime: string;
+  intervalMinutes?: number | null;
+  scheduleDays?: string | null;
   notify?: boolean;
   thumbnail?: string;
 }): void {
@@ -1638,7 +1646,7 @@ export function createCronJob(input: {
     input.thumbnail ||
     CRON_THUMBS[Math.floor(Math.random() * CRON_THUMBS.length)];
   db.prepare(
-    `INSERT INTO cron_jobs (id, name, prompt, skill_hint, schedule_type, schedule_time, notify, thumbnail, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO cron_jobs (id, name, prompt, skill_hint, schedule_type, schedule_time, interval_minutes, schedule_days, notify, thumbnail, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     input.id,
     input.name,
@@ -1646,6 +1654,8 @@ export function createCronJob(input: {
     input.skillHint ?? '[]',
     input.scheduleType,
     input.scheduleTime,
+    input.intervalMinutes ?? null,
+    input.scheduleDays ?? null,
     input.notify === false ? 0 : 1,
     thumb,
     now,
@@ -1663,6 +1673,8 @@ export function updateCronJob(
       | 'skill_hint'
       | 'schedule_type'
       | 'schedule_time'
+      | 'interval_minutes'
+      | 'schedule_days'
       | 'notify'
     >
   >,
@@ -1688,6 +1700,14 @@ export function updateCronJob(
   if (updates.schedule_time !== undefined) {
     fields.push('schedule_time = ?');
     values.push(updates.schedule_time);
+  }
+  if (updates.interval_minutes !== undefined) {
+    fields.push('interval_minutes = ?');
+    values.push(updates.interval_minutes);
+  }
+  if (updates.schedule_days !== undefined) {
+    fields.push('schedule_days = ?');
+    values.push(updates.schedule_days);
   }
   if (updates.notify !== undefined) {
     fields.push('notify = ?');
@@ -1727,7 +1747,8 @@ export function getServiceCronsByService(
     .prepare(
       `
     SELECT sc.service_id, sc.cron_id, sc.status, sc.last_run, sc.next_run,
-           cj.id, cj.name, cj.prompt, cj.schedule_type, cj.schedule_time, cj.notify, cj.created_at, cj.updated_at
+           cj.id, cj.name, cj.prompt, cj.schedule_type, cj.schedule_time,
+           cj.interval_minutes, cj.schedule_days, cj.notify, cj.created_at, cj.updated_at
     FROM service_crons sc JOIN cron_jobs cj ON cj.id = sc.cron_id
     WHERE sc.service_id = ?
   `,
@@ -1743,6 +1764,16 @@ export function attachCronToService(
   db.prepare(
     `INSERT OR IGNORE INTO service_crons (service_id, cron_id, status, next_run) VALUES (?, ?, 'active', ?)`,
   ).run(serviceId, cronId, nextRun);
+}
+
+/** 크론 스케줄 변경 시 연결된 모든 service_crons의 next_run을 일괄 갱신 */
+export function updateNextRunByCronId(
+  cronId: string,
+  nextRun: string | null,
+): void {
+  db.prepare(
+    `UPDATE service_crons SET next_run = ? WHERE cron_id = ? AND status = 'active'`,
+  ).run(nextRun, cronId);
 }
 
 export function detachCronFromService(serviceId: string, cronId: string): void {
@@ -1764,7 +1795,8 @@ export function getDueServiceCrons(): Array<
     .prepare(
       `
     SELECT sc.service_id, sc.cron_id, sc.status, sc.last_run, sc.next_run,
-           cj.name, cj.prompt, cj.skill_hint, cj.schedule_type, cj.schedule_time, cj.notify,
+           cj.name, cj.prompt, cj.skill_hint, cj.schedule_type, cj.schedule_time,
+           cj.interval_minutes, cj.schedule_days, cj.notify,
            s.agent_profile_id, s.channel_id, s.target_id
     FROM service_crons sc
     JOIN cron_jobs cj ON cj.id = sc.cron_id

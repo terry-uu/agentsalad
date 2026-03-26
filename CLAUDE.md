@@ -16,7 +16,7 @@ Auto-compaction (Claude SDK pattern): when conversation context exceeds 75% of t
 |------|---------|
 | `src/index.ts` | Main orchestrator: DB init, service router, Web UI |
 | `src/service-router.ts` | Message processing engine: service matching → auto-compaction → LLM call → response + processCronMessage |
-| `src/cron-scheduler.ts` | Cron scheduler: 30s polling loop, due check, prompt wrapping, once cleanup |
+| `src/cron-scheduler.ts` | Cron scheduler: 10s polling loop, due check, weekly/interval/once next_run 계산, cleanup |
 | `src/compaction.ts` | Token estimation, context window map, auto-compaction engine |
 | `src/providers/index.ts` | Multi-provider router (Vercel AI SDK: streamChat, chat) |
 | `src/providers/system-prompt.ts` | Immutable System Prompt 1 (base rules for all agents) |

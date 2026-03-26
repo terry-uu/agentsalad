@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.2 (2026-03-26)
+
+### Features
+- 크론 반복 예약: weekly(요일별 반복) + interval(시간 간격 반복) 스케줄 타입 추가
+- 기존 daily 타입을 weekly로 자동 마이그레이션 (매일 반복 = 전 요일 선택)
+- 크론 수정 시 연결된 모든 서비스의 next_run 자동 재계산
+
+### Bug Fixes
+- 크론 스케줄 변경 시 service_crons.next_run이 갱신되지 않던 버그 수정
+
 ## v0.1.1 (2026-03-26)
 
 ### Bug Fixes
