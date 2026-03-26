@@ -1,7 +1,7 @@
 # Electron 데스크톱 앱 빌드 + 릴리스 자동화
 #
 # main 푸시: macOS(arm64) + Windows(x64) 빌드 → Actions Artifacts
-# 태그 v* 푸시: 동일 빌드 → public 리포(terry-uu/agentsalad) 릴리스 자동 생성 + 에셋 업로드
+# 태그 v* 푸시: 동일 빌드 → public 리포(terry-uu/agentsalad) 릴리스 자동 생성 + 에셋 업로드 + 랜딩 페이지 갱신
 #
 # 사전 준비: private 리포 Settings > Secrets에 PUBLIC_REPO_TOKEN 등록
 # (PAT, repo 스코프, public 리포 쓰기 권한)
@@ -125,3 +125,28 @@ jobs:
           gh release upload "$TAG" artifacts/mac/* artifacts/win/* --repo "$REPO"
 
           echo "Release upload complete: $TAG"
+
+      - name: Update landing page
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+        run: |
+          REPO="terry-uu/agentsalad"
+          FILE="docs/index.html"
+
+          # private 리포에서 소스 체크아웃
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/terry-uu/agentsalad-private.git" _src
+
+          # public 리포의 현재 SHA 조회
+          SHA=$(gh api "repos/${REPO}/contents/${FILE}" --jq '.sha')
+
+          # base64 인코딩 후 업데이트
+          CONTENT=$(base64 -w 0 "_src/${FILE}")
+          gh api "repos/${REPO}/contents/${FILE}" \
+            -X PUT \
+            -f message="docs: 랜딩 페이지 업데이트 (${{ steps.version.outputs.tag }})" \
+            -f content="$CONTENT" \
+            -f sha="$SHA" \
+            --silent
+
+          echo "Landing page updated"
+          rm -rf _src

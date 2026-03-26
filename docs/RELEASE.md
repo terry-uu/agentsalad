@@ -118,7 +118,7 @@ git push origin main --tags
 
 ## 릴리스 절차 (전체 플로우)
 
-CI/CD가 설정된 경우 Step 2~3이 자동화된다. 태그 푸시만으로 빌드+업로드 완료.
+CI/CD가 설정된 경우 Step 2~4가 전부 자동화된다. 태그 푸시만으로 빌드+릴리스 생성+에셋 업로드+랜딩 페이지 갱신 완료.
 
 ### Step 1. Private 푸시
 
@@ -156,6 +156,10 @@ gh release upload v{VERSION} \
 ```
 
 ### Step 4. 랜딩 페이지 반영
+
+**CI/CD 사용 시**: 태그 푸시 워크플로우가 자동으로 private 리포의 `docs/index.html`을 public 리포에 반영. 수동 절차 불필요.
+
+**수동 반영 시**:
 
 `docs/index.html`이 변경되었다면 public 리포에 반영한다. GitHub Pages가 자동으로 재배포한다.
 
