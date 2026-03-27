@@ -451,10 +451,20 @@ export class ServerManager extends EventEmitter {
       let args: string[];
       let useShell = false;
 
+      let installEnv = env;
+
       if (npmCliPath) {
         cmd = nodePath;
         args = [npmCliPath, 'install', '--production', '--no-optional'];
         this.appendLog(`[setup] Using bundled npm: ${nodePath} ${npmCliPath}`);
+
+        // node-gyp가 native 모듈 컴파일 시 PATH에서 `node`를 찾아 타겟 ABI를 결정.
+        // 번들 Node의 bin/을 PATH 앞에 삽입하여 시스템 Node 대신 번들 Node를 사용하게 함.
+        const bundledBinDir = path.dirname(nodePath);
+        installEnv = {
+          ...env,
+          PATH: `${bundledBinDir}${path.delimiter}${env.PATH || ''}`,
+        };
       } else {
         cmd = isWin ? 'npm.cmd' : 'npm';
         args = ['install', '--production', '--no-optional'];
@@ -464,7 +474,7 @@ export class ServerManager extends EventEmitter {
 
       const child = spawn(cmd, args, {
         cwd: appRoot,
-        env,
+        env: installEnv,
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: useShell,
       });
