@@ -118,14 +118,8 @@ jobs:
               --latest
           fi
 
-          # 기존 에셋 삭제 (존재하면). 없으면 무시.
-          for asset in artifacts/mac/* artifacts/win/*; do
-            name=$(basename "$asset")
-            gh release delete-asset "$TAG" "$name" --repo "$REPO" --yes 2>/dev/null || true
-          done
-
-          # 새 에셋 업로드
-          gh release upload "$TAG" artifacts/mac/* artifacts/win/* --repo "$REPO"
+          # 새 에셋 업로드 (동명 에셋 존재 시 덮어쓰기)
+          gh release upload "$TAG" artifacts/mac/* artifacts/win/* --repo "$REPO" --clobber
 
           echo "Release upload complete: $TAG"
 
