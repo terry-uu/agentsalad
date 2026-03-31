@@ -220,7 +220,7 @@ footer a:hover{color:var(--text)}
         Download
       </a>
     </div>
-    <p class="hero-note">macOS (Apple Silicon · Intel) · Windows (x64) · Linux (x64)</p>
+    <p class="hero-note">macOS (Apple Silicon · Intel) · Windows (x64) · Linux (x64 · ARM64)</p>
   </div>
 </section>
 
@@ -528,7 +528,7 @@ footer a:hover{color:var(--text)}
         <div class="skill-list">
           <div class="skill-item"><span class="skill-dot"></span>File Read / Write / List <span class="sub">— workspace scoped</span></div>
           <div class="skill-item"><span class="skill-dot"></span>Web Fetch <span class="sub">— HTML to text</span></div>
-          <div class="skill-item"><span class="skill-dot"></span>Web Browse <span class="sub">— full Playwright browser</span></div>
+          <div class="skill-item"><span class="skill-dot"></span>Web Browse <span class="sub">— real Chrome via extension</span></div>
           <div class="skill-item"><span class="skill-dot"></span>Bash Command <span class="sub">— system shell access</span></div>
           <div class="skill-item"><span class="skill-dot"></span>Gmail <span class="sub">— search, read, send</span></div>
           <div class="skill-item"><span class="skill-dot"></span>Google Calendar <span class="sub">— list, create</span></div>
@@ -576,7 +576,14 @@ footer a:hover{color:var(--text)}
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.868.07 1.723-.26 2.456-.594.733-.34 1.395-.668 1.882-.667.665.003 1.025-.23 1.126-.492.1-.26-.03-.6-.313-.832-.56-.468-1.275-.564-1.122-1.202a.076.076 0 00.039-.128c.32-.642.089-1.534-.124-2.341-.263-1.063-.722-2.116-1.07-2.824-.348-.702-.625-1.456-.835-2.212-.21-.749-.353-1.505-.378-2.208-.012-.26-.008-.479.017-.627a.346.346 0 00.002-.107c-.147-3.466-3.197-6.327-7.018-6.327z"/></svg>
         Linux (x64)
       </a>
+      <a href="https://github.com/terry-uu/agentsalad/releases/download/v0.1.7/Agent.Salad-0.1.7-arm64.AppImage" class="btn btn-dl" id="dl-linux-arm64">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.868.07 1.723-.26 2.456-.594.733-.34 1.395-.668 1.882-.667.665.003 1.025-.23 1.126-.492.1-.26-.03-.6-.313-.832-.56-.468-1.275-.564-1.122-1.202a.076.076 0 00.039-.128c.32-.642.089-1.534-.124-2.341-.263-1.063-.722-2.116-1.07-2.824-.348-.702-.625-1.456-.835-2.212-.21-.749-.353-1.505-.378-2.208-.012-.26-.008-.479.017-.627a.346.346 0 00.002-.107c-.147-3.466-3.197-6.327-7.018-6.327z"/></svg>
+        Linux (ARM64)
+      </a>
     </div>
+    <p class="dl-note" style="margin-top:24px">
+      <a href="https://github.com/terry-uu/agentsalad/releases/latest/download/AgentSalad-Browser-Extension.zip">Chrome Extension</a> — for Web Browse skill (controls your real browser)
+    </p>
   </div>
 </section>
 
@@ -609,8 +616,11 @@ footer a:hover{color:var(--text)}
     btn.textContent = 'Download for Windows';
     btn.href = 'https://github.com/terry-uu/agentsalad/releases/download/v0.1.7/Agent.Salad.Setup.0.1.7.exe';
   } else if (/Linux/i.test(ua)) {
-    btn.textContent = 'Download for Linux';
-    btn.href = 'https://github.com/terry-uu/agentsalad/releases/download/v0.1.7/Agent.Salad-0.1.7.AppImage';
+    var isArm = /aarch64|arm64/i.test(ua);
+    btn.textContent = 'Download for Linux' + (isArm ? ' (ARM64)' : '');
+    btn.href = isArm
+      ? 'https://github.com/terry-uu/agentsalad/releases/download/v0.1.7/Agent.Salad-0.1.7-arm64.AppImage'
+      : 'https://github.com/terry-uu/agentsalad/releases/download/v0.1.7/Agent.Salad-0.1.7.AppImage';
   } else if (/Mac/i.test(ua)) {
     btn.textContent = 'Download for Mac';
   }
