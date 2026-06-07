@@ -1,0 +1,36 @@
+{
+  "name": "agentsalad-server",
+  "version": "0.1.12",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.58",
+    "@ai-sdk/google": "^3.0.52",
+    "@ai-sdk/groq": "^3.0.31",
+    "@ai-sdk/moonshotai": "^2.0.12",
+    "@ai-sdk/openai": "^3.0.41",
+    "@ai-sdk/openai-compatible": "^2.0.35",
+    "@ohah/hwpjs": "^0.1.0-rc.10",
+    "@openrouter/ai-sdk-provider": "^2.3.3",
+    "@slack/bolt": "^4.6.0",
+    "@ssabrojs/hwpxjs": "^0.2.0",
+    "ai": "^6.0.116",
+    "better-sqlite3": "^12.8.0",
+    "cron-parser": "^5.5.0",
+    "discord.js": "^14.25.1",
+    "grammy": "^1.41.1",
+    "mammoth": "^1.12.0",
+    "pdf-parse": "^2.4.5",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "tar": "^7.5.13",
+    "word-extractor": "^1.0.4",
+    "ws": "^8.20.0",
+    "xlsx": "^0.18.5",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.6"
+  },
+  "overrides": {
+    "undici": "~6.24.0"
+  }
+}

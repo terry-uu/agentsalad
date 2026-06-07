@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { width: 300px; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; color: #1a1a1a; background: #fff; }
+h1 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.status { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 12px; font-weight: 500; }
+.status.connected { background: #e6f9e6; color: #1a7a1a; }
+.status.disconnected { background: #fde8e8; color: #c53030; }
+.status.connecting { background: #fef3cd; color: #856404; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.connected .dot { background: #38a169; }
+.disconnected .dot { background: #e53e3e; }
+.connecting .dot { background: #d69e2e; }
+label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+input[type="text"] { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace; outline: none; }
+input:focus { border-color: #4299e1; box-shadow: 0 0 0 2px rgba(66,153,225,.2); }
+.actions { display: flex; gap: 8px; margin-top: 12px; }
+button { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+button:hover { opacity: .85; }
+.btn-c { background: #4299e1; color: #fff; }
+.btn-d { background: #e53e3e; color: #fff; }
+.btn-d:disabled { background: #ccc; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<h1>Agent Salad</h1>
+<div id="st" class="status disconnected"><span class="dot"></span><span id="stxt">연결 안 됨</span></div>
+<label for="srv">서버 주소</label>
+<input type="text" id="srv" value="127.0.0.1:3210" spellcheck="false">
+<div class="actions">
+  <button class="btn-c" id="bc">연결</button>
+  <button class="btn-d" id="bd" disabled>해제</button>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

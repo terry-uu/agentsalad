@@ -1,0 +1,272 @@
+/**
+ * Telegram Channel - grammY 기반 텔레그램 봇
+ *
+ * 페어링: 봇 토큰 입력 -> getMe() 검증 -> DB 저장
+ * 메시지 수신: long polling
+ * 메시지 발송: sendMessage API
+ * 첨부파일: message:document + message:photo 핸들러로 첨부 감지.
+ *   getFile() → Telegram CDN URL 구성. context.attachments로 전달.
+ * Telegram은 DM 전용 채널이므로 context.isDM=true 고정 전달.
+ * everyone 템플릿이 연결된 경우 새 발신자 DM마다 실제 user 타겟/서비스가 자동 생성된다.
+ */
+import { Bot, InputFile } from 'grammy';
+
+import { logger } from '../logger.js';
+import type { Channel, MessageAttachment, OnServiceMessage } from '../types.js';
+
+export interface TelegramChannelConfig {
+  channelId: string;
+  botToken: string;
+  onMessage: OnServiceMessage;
+}
+
+export function createTelegramChannel(config: TelegramChannelConfig): Channel {
+  const { channelId, botToken, onMessage } = config;
+
+  const bot = new Bot(botToken);
+  let connected = false;
+  let botUsername = '';
+
+  /** Telegram File → 다운로드 URL 구성 */
+  async function buildFileUrl(
+    fileId: string,
+  ): Promise<{ url: string; size: number } | null> {
+    try {
+      const file = await bot.api.getFile(fileId);
+      if (!file.file_path) return null;
+      const url = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
+      return { url, size: file.file_size ?? 0 };
+    } catch {
+      return null;
+    }
+  }
+
+  function telegramUserName(from: {
+    first_name: string;
+    last_name?: string;
+  }): string {
+    return from.first_name + (from.last_name ? ` ${from.last_name}` : '');
+  }
+
+  bot.on('message:text', (ctx) => {
+    const userId = String(ctx.from.id);
+    const userName = telegramUserName(ctx.from);
+    const text = ctx.message.text;
+
+    logger.debug(
+      { channelId, userId, userName, textLen: text.length },
+      'Telegram message received',
+    );
+
+    onMessage(channelId, userId, userName, text, { isDM: true });
+  });
+
+  bot.on('message:document', async (ctx) => {
+    const userId = String(ctx.from.id);
+    const userName = telegramUserName(ctx.from);
+    const doc = ctx.message.document;
+    const text = ctx.message.caption || '';
+
+    const fileInfo = await buildFileUrl(doc.file_id);
+    if (!fileInfo) return;
+
+    const attachments: MessageAttachment[] = [
+      {
+        url: fileInfo.url,
+        filename: doc.file_name || 'document',
+        size: fileInfo.size || doc.file_size || 0,
+        mediaType: doc.mime_type || 'application/octet-stream',
+      },
+    ];
+
+    logger.debug(
+      {
+        channelId,
+        userId,
+        userName,
+        textLen: text.length,
+        filename: attachments[0].filename,
+      },
+      'Telegram document received',
+    );
+
+    onMessage(channelId, userId, userName, text, {
+      isDM: true,
+      attachments,
+    });
+  });
+
+  bot.on('message:photo', async (ctx) => {
+    const userId = String(ctx.from.id);
+    const userName = telegramUserName(ctx.from);
+    const text = ctx.message.caption || '';
+
+    const photos = ctx.message.photo;
+    const largest = photos[photos.length - 1];
+    const fileInfo = await buildFileUrl(largest.file_id);
+    if (!fileInfo) return;
+
+    const attachments: MessageAttachment[] = [
+      {
+        url: fileInfo.url,
+        filename: `photo-${largest.file_unique_id}.jpg`,
+        size: fileInfo.size || largest.file_size || 0,
+        mediaType: 'image/jpeg',
+      },
+    ];
+
+    logger.debug(
+      { channelId, userId, userName, textLen: text.length },
+      'Telegram photo received',
+    );
+
+    onMessage(channelId, userId, userName, text, {
+      isDM: true,
+      attachments,
+    });
+  });
+
+  bot.catch((err) => {
+    logger.error({ channelId, err: err.message }, 'Telegram bot error');
+  });
+
+  return {
+    channelId,
+    name: `telegram:${botUsername || channelId}`,
+
+    async connect(): Promise<void> {
+      try {
+        const me = await bot.api.getMe();
+        botUsername = me.username;
+        (this as Channel).name = `telegram:${botUsername}`;
+        logger.info(
+          { channelId, username: botUsername },
+          'Telegram bot verified',
+        );
+
+        bot.start({
+          onStart: () => {
+            connected = true;
+            logger.info(
+              { channelId, username: botUsername },
+              'Telegram polling started',
+            );
+          },
+        });
+      } catch (err) {
+        logger.error({ channelId, err }, 'Failed to connect Telegram bot');
+        throw err;
+      }
+    },
+
+    async sendMessage(targetUserId: string, text: string): Promise<void> {
+      const chatId = Number(targetUserId);
+      logger.debug(
+        {
+          channelId,
+          targetUserId,
+          chatId,
+          textLen: text.length,
+          textPreview: text.slice(0, 50),
+        },
+        'Telegram sendMessage called',
+      );
+
+      const MAX_LENGTH = 4096;
+      if (text.length <= MAX_LENGTH) {
+        const result = await bot.api.sendMessage(chatId, text);
+        logger.debug(
+          { channelId, chatId, messageId: result.message_id },
+          'Telegram message delivered',
+        );
+        return;
+      }
+      for (let i = 0; i < text.length; i += MAX_LENGTH) {
+        const result = await bot.api.sendMessage(
+          chatId,
+          text.slice(i, i + MAX_LENGTH),
+        );
+        logger.debug(
+          {
+            channelId,
+            chatId,
+            messageId: result.message_id,
+            chunk: Math.floor(i / MAX_LENGTH) + 1,
+          },
+          'Telegram chunk delivered',
+        );
+      }
+    },
+
+    async sendPhoto(
+      targetUserId: string,
+      filePath: string,
+      caption?: string,
+    ): Promise<void> {
+      const chatId = Number(targetUserId);
+      try {
+        const result = await bot.api.sendPhoto(
+          chatId,
+          new InputFile(filePath),
+          {
+            caption: caption ? caption.slice(0, 1024) : undefined,
+          },
+        );
+        logger.debug(
+          { channelId, chatId, messageId: result.message_id },
+          'Telegram photo delivered',
+        );
+      } catch (err) {
+        logger.warn(
+          {
+            channelId,
+            chatId,
+            filePath,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          'Failed to send Telegram photo',
+        );
+      }
+    },
+
+    isConnected(): boolean {
+      return connected;
+    },
+
+    async disconnect(): Promise<void> {
+      connected = false;
+      bot.stop();
+      logger.info({ channelId }, 'Telegram bot stopped');
+    },
+
+    async setTyping(targetUserId: string, isTyping = true): Promise<void> {
+      if (!isTyping) return; // Telegram has no "stop typing" API; it auto-expires
+      try {
+        await bot.api.sendChatAction(Number(targetUserId), 'typing');
+      } catch {
+        // non-critical
+      }
+    },
+  };
+}
+
+/**
+ * 봇 토큰 검증 - 페어링 시 사용.
+ * 성공 시 봇 정보 반환, 실패 시 null.
+ */
+export async function verifyTelegramBot(
+  botToken: string,
+): Promise<{ id: number; username: string; firstName: string } | null> {
+  try {
+    const bot = new Bot(botToken);
+    const me = await bot.api.getMe();
+    return {
+      id: me.id,
+      username: me.username,
+      firstName: me.first_name,
+    };
+  } catch (err) {
+    logger.warn({ err }, 'Telegram bot token verification failed');
+    return null;
+  }
+}

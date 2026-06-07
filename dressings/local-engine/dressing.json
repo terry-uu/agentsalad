@@ -1,0 +1,23 @@
+{
+  "dressing_type": "agent_dressing",
+  "provider_key": "local",
+  "name": "local-engine",
+  "display_name": "Local Model Engine",
+  "version": "0.1.2",
+  "description": "GGUF 모델 파일 하나만 있으면 내 컴퓨터에서 바로 AI 에이전트를 돌릴 수 있습니다. Ollama 없이, API 키 없이 — 에이전트 샐러드에 마운트하면 도구 호출까지 지원하는 완전한 로컬 AI.",
+  "description_ko": "GGUF 모델 파일 하나만 있으면 내 컴퓨터에서 바로 AI 에이전트를 돌릴 수 있습니다. Ollama 없이, API 키 없이 — 에이전트 샐러드에 마운트하면 도구 호출까지 지원하는 완전한 로컬 AI.",
+  "description_ja": "GGUFモデルファイル一つで、自分のPCでAIエージェントを実行。Ollama不要、APIキー不要 — Agent Saladにマウントすればツール呼び出しまで対応する完全ローカルAI。",
+  "description_zh": "只需一个GGUF模型文件，即可在本地运行AI代理。无需Ollama，无需API密钥 — 挂载到Agent Salad即可获得支持工具调用的完整本地AI。",
+  "author": "Agent Salad",
+  "category": "provider",
+  "tags": ["local", "gguf", "llama.cpp", "gemma", "offline"],
+  "requires_script": false,
+  "min_agent_salad_version": "0.1.11",
+  "license": "MIT",
+  "file_extensions": [".gguf"],
+  "guide_url": "https://huggingface.co/models?library=gguf&sort=trending",
+  "guide_text": "Browse GGUF models on HuggingFace",
+  "guide_text_ko": "HuggingFace에서 GGUF 모델 찾기",
+  "guide_text_ja": "HuggingFaceでGGUFモデルを探す",
+  "guide_text_zh": "在HuggingFace浏览GGUF模型"
+}

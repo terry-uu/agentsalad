@@ -1,0 +1,96 @@
+{
+  "dressing_type": "channel_dressing",
+  "channel_type": "kakaotalk",
+  "name": "kakaotalk",
+  "display_name": "KakaoTalk",
+  "version": "0.2.1",
+  "description": "끝없는 반복 응대에 지치셨나요? 카카오톡 채널에 AI 에이전트를 연결하면, 응대 매뉴얼대로 24시간 자동 응대합니다. 커스텀 스킬을 연동하면 주문·재고 현황 조회, 일정 확인, 예약 접수까지 — 단순 챗봇이 아닌 실무를 처리하는 AI 상담원. 터널 설정도 자동이라 토큰 하나면 바로 시작할 수 있습니다.",
+  "description_ko": "끝없는 반복 응대에 지치셨나요? 카카오톡 채널에 AI 에이전트를 연결하면, 응대 매뉴얼대로 24시간 자동 응대합니다. 커스텀 스킬을 연동하면 주문·재고 현황 조회, 일정 확인, 예약 접수까지 — 단순 챗봇이 아닌 실무를 처리하는 AI 상담원. 터널 설정도 자동이라 토큰 하나면 바로 시작할 수 있습니다.",
+  "description_ja": "繰り返しの応対に疲れていませんか？KakaoTalkチャンネルにAIエージェントを接続すれば、対応マニュアル通り24時間自動応対。カスタムスキル連携で注文・在庫照会、スケジュール確認、予約受付まで — 単なるチャットボットではなく実務を処理するAI担当者。トンネル設定も自動、トークン一つですぐ開始。",
+  "description_zh": "厌倦了无休止的重复应答？将AI代理连接到KakaoTalk频道，按应答手册24小时自动应答。连接自定义技能后可查询订单·库存、确认日程、接受预约 — 不是简单聊天机器人，而是处理实务的AI客服。隧道自动配置，输入令牌即可开始。",
+  "author": "Agent Salad",
+  "category": "channel",
+  "tags": ["kakaotalk", "kakao", "messenger", "ngrok", "tunnel"],
+  "requires_script": false,
+  "min_agent_salad_version": "0.1.12",
+  "supports_outbound": false,
+  "setup_steps": [
+    {
+      "title": "Create Kakao Channel",
+      "title_ko": "카카오톡 채널 만들기",
+      "title_ja": "カカオチャンネル作成",
+      "title_zh": "创建Kakao频道",
+      "body": "1. Go to https://business.kakao.com\n2. Create a new channel (or use an existing one)\n3. The channel must be public",
+      "body_ko": "1. https://business.kakao.com 접속\n2. 새 채널 만들기 (기존 채널 사용 가능)\n3. 채널이 공개 상태여야 합니다",
+      "body_ja": "1. https://business.kakao.com にアクセス\n2. 新しいチャンネルを作成（既存チャンネルも使用可能）\n3. チャンネルを公開状態にしてください",
+      "body_zh": "1. 访问 https://business.kakao.com\n2. 创建新频道（可使用现有频道）\n3. 频道必须为公开状态",
+      "image": ""
+    },
+    {
+      "title": "Create Chatbot + Connect Channel",
+      "title_ko": "챗봇 만들기 + 채널 연결",
+      "title_ja": "チャットボット作成 + チャンネル連携",
+      "title_zh": "创建聊天机器人 + 连接频道",
+      "body": "1. Go to https://chatbot.kakao.com\n2. Create a new chatbot\n3. Connect the channel from step 1 to the chatbot",
+      "body_ko": "1. https://chatbot.kakao.com 접속\n2. 새 챗봇 만들기\n3. 1단계에서 만든 채널을 챗봇과 연결",
+      "body_ja": "1. https://chatbot.kakao.com にアクセス\n2. 新しいチャットボットを作成\n3. ステップ1のチャンネルをチャットボットに連携",
+      "body_zh": "1. 访问 https://chatbot.kakao.com\n2. 创建新聊天机器人\n3. 将步骤1的频道连接到聊天机器人",
+      "image": ""
+    },
+    {
+      "title": "Request Callback API",
+      "title_ko": "콜백 API 사용 신청",
+      "title_ja": "コールバックAPI使用申請",
+      "title_zh": "申请回调API使用",
+      "body": "1. In Open Builder: Settings > AI Chatbot Management\n2. Click 'Request Callback API'\n3. Fill in the reason and submit\n4. Wait for approval (usually instant)",
+      "body_ko": "1. 오픈빌더: 설정 > AI 챗봇 관리\n2. 콜백 API 사용 신청\n3. 사유 작성 후 신청\n4. 승인 대기 (보통 즉시 승인)",
+      "body_ja": "1. オープンビルダー: 設定 > AIチャットボット管理\n2. コールバックAPI使用申請\n3. 理由を記入して申請\n4. 承認待ち（通常は即時承認）",
+      "body_zh": "1. 开放构建器: 设置 > AI聊天机器人管理\n2. 申请回调API使用\n3. 填写申请理由并提交\n4. 等待审批（通常即时通过）",
+      "image": ""
+    },
+    {
+      "title": "Add Channel in Agent Salad",
+      "title_ko": "Agent Salad에서 채널 추가",
+      "title_ja": "Agent Saladでチャンネル追加",
+      "title_zh": "在Agent Salad中添加频道",
+      "body": "1. Channel tab > + button > KakaoTalk\n2. Choose tunnel method + enter token\n3. Save → tunnel starts automatically\n4. Copy the Webhook URL shown below",
+      "body_ko": "1. 채널 탭 > + 버튼 > KakaoTalk 선택\n2. 터널 방식 선택 + 토큰 입력\n3. 저장 → 터널이 자동으로 시작됩니다\n4. 아래에 표시된 Webhook URL을 복사",
+      "body_ja": "1. チャンネルタブ > + ボタン > KakaoTalk選択\n2. トンネル方式を選択 + トークン入力\n3. 保存 → トンネルが自動起動\n4. 表示されたWebhook URLをコピー",
+      "body_zh": "1. 频道标签 > + 按钮 > KakaoTalk\n2. 选择隧道方式 + 输入令牌\n3. 保存 → 隧道自动启动\n4. 复制下方显示的Webhook URL",
+      "image": ""
+    },
+    {
+      "title": "Create Skill + Paste Webhook URL",
+      "title_ko": "스킬 생성 + Webhook URL 입력",
+      "title_ja": "スキル作成 + Webhook URL入力",
+      "title_zh": "创建技能 + 输入Webhook URL",
+      "body": "1. In Open Builder: Skills > Create Skill\n2. Paste the Webhook URL from step 4 into the URL field\n3. Save",
+      "body_ko": "1. 오픈빌더: 스킬 > 스킬 만들기\n2. URL 필드에 4단계에서 복사한 Webhook URL 붙여넣기\n3. 저장",
+      "body_ja": "1. オープンビルダー: スキル > スキル作成\n2. URL欄にステップ4のWebhook URLを貼り付け\n3. 保存",
+      "body_zh": "1. 开放构建器: 技能 > 创建技能\n2. 在URL字段粘贴步骤4的Webhook URL\n3. 保存",
+      "image": ""
+    },
+    {
+      "title": "Connect Fallback Block to Skill",
+      "title_ko": "폴백 블록에 스킬 연결",
+      "title_ja": "フォールバックブロックにスキル連携",
+      "title_zh": "将技能连接到后备块",
+      "body": "1. Scenarios > Fallback Block\n2. Select the skill from step 5\n3. Save",
+      "body_ko": "1. 시나리오 > 폴백 블록\n2. 5단계에서 만든 스킬 선택\n3. 저장",
+      "body_ja": "1. シナリオ > フォールバックブロック\n2. ステップ5のスキルを選択\n3. 保存",
+      "body_zh": "1. 场景 > 后备块\n2. 选择步骤5的技能\n3. 保存",
+      "image": ""
+    },
+    {
+      "title": "Deploy + Test",
+      "title_ko": "배포 + 테스트",
+      "title_ja": "デプロイ + テスト",
+      "title_zh": "部署 + 测试",
+      "body": "1. Click 'Deploy' in Open Builder (top-right)\n2. Choose 'Full Deploy'\n3. Send a message to your channel in KakaoTalk\n4. If you get an AI response, you're done!",
+      "body_ko": "1. 오픈빌더 좌측 배포 메뉴 클릭\n2. 전체 배포 선택 → 배포\n3. 카카오톡에서 채널에 메시지 보내기\n4. AI 응답이 오면 완료!",
+      "body_ja": "1. オープンビルダー左側のデプロイメニューをクリック\n2. 全体デプロイを選択 → デプロイ\n3. カカオトークでチャンネルにメッセージ送信\n4. AI応答が来れば完了！",
+      "body_zh": "1. 点击开放构建器左侧部署菜单\n2. 选择全量部署 → 部署\n3. 在KakaoTalk中向频道发送消息\n4. 收到AI回复即完成！",
+      "image": ""
+    }
+  ]
+}
